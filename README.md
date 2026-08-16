@@ -17,9 +17,26 @@ Design language borrows from the Braun BC12 wall clock: a single ring where hour
 ## Requirements
 
 - macOS 12 (Monterey) or later
-- Xcode Command Line Tools — `xcode-select --install` if you don't already have `swiftc`/`clang`. A full Xcode install is not required.
 
-## Build & install
+There are two ways to get Formzeit running. Building from source has no extra steps; downloading the prebuilt release has one required extra step, explained below.
+
+## Option A: Download a prebuilt release (one extra step)
+
+Grab the `.zip` from [the latest release](https://github.com/tilakp/formzeit-screensaver/releases/latest), unzip it, and drag `Formzeit.saver` into `~/Library/Screen Savers/` (create the folder if it doesn't exist).
+
+**This is not a notarized build**, so macOS will not let it load as downloaded. This isn't a hypothetical warning — it's what actually happens, verified by simulating a real browser download end to end:
+
+- `spctl` assesses the bundle as `rejected` (expected — it's ad-hoc signed only, no Apple Developer ID). This stays true even after the fix below; it isn't the thing that's actually blocking you.
+- What *does* block it is the quarantine flag macOS attaches to anything downloaded from a browser. With that flag present, the bundle fails to load at all — selecting it in System Settings just won't show a working preview, with no error dialog explaining why.
+- **The fix** is to clear that flag, which is the specific thing that's blocking it (confirmed: the bundle loads successfully immediately after this, even though `spctl` alone still reports "rejected"):
+
+  ```sh
+  xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/Formzeit.saver
+  ```
+
+Then open **System Settings → Screen Saver** and select **Formzeit**.
+
+## Option B: Build from source (no extra step, needs Xcode CLI tools)
 
 ```sh
 git clone https://github.com/tilakp/formzeit-screensaver.git
@@ -29,7 +46,9 @@ cd formzeit-screensaver
 
 This compiles the bundle from source, ad-hoc code-signs it, installs it to `~/Library/Screen Savers/Formzeit.saver`, and restarts the system's screensaver host processes so the new build actually gets picked up (macOS otherwise keeps a stale copy loaded in memory). Then open **System Settings → Screen Saver** and select **Formzeit**.
 
-> **Why build from source instead of downloading a binary?** This project isn't notarized with an Apple Developer ID. A prebuilt binary downloaded from GitHub would be quarantined by Gatekeeper and refuse to run. Building locally with `build.sh` sidesteps that — the bundle is ad-hoc signed for your machine and runs immediately, no security dialog to click through.
+A build-from-source bundle never gets the quarantine flag in the first place (it was never downloaded), so it just works with no Gatekeeper step. This requires Xcode Command Line Tools — `xcode-select --install` if you don't already have `swiftc`/`clang`. A full Xcode install is not required.
+
+> Both options produce the same ad-hoc-signed bundle. Neither is notarized, because that requires a paid Apple Developer Program membership ($99/year). The only difference between the two options is whether the file passed through a browser download and picked up a quarantine flag along the way.
 
 ## Development
 
