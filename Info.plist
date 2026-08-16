@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Formzeit</string>
 	<key>CFBundleExecutable</key>
 	<string>Formzeit</string>
 	<key>CFBundleIdentifier</key>
@@ -12,21 +14,19 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Formzeit</string>
-	<key>CFBundleDisplayName</key>
-	<string>Formzeit</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
-	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>1.0.1</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>NSPrincipalClass</key>
-	<string>FormzeitView</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Tilak Patel</string>
+	<key>NSPrincipalClass</key>
+	<string>FormzeitView</string>
 </dict>
 </plist>
