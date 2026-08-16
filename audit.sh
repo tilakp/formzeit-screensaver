@@ -9,6 +9,40 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Audit/main.swift constructs a real FormzeitDefaults(), which reads through
+# to this machine's actual persisted ScreenSaverDefaults (24-hour toggle,
+# accent color, ...) — the same domain you get from clicking through the
+# settings panel while testing. Left in a non-factory state, the audit
+# silently measures a different rendering than its own math assumes (it
+# labels numerals 1-12 regardless of what's actually drawn), which reads as
+# a geometry regression that isn't one. Pin known values for the run, then
+# put back whatever was there before — this dev tool has no business
+# permanently changing your test settings as a side effect.
+DOMAIN="com.tilakpatel.formzeit"
+BACKUP=$(mktemp -t formzeit-audit-defaults).plist
+HAD_DOMAIN=0
+if defaults -currentHost export "$DOMAIN" "$BACKUP" 2>/dev/null; then
+  HAD_DOMAIN=1
+fi
+restore_defaults() {
+  # `defaults import` overlays onto whatever's already in the domain rather
+  # than replacing it outright, so the keys this script writes below would
+  # otherwise survive the "restore" — delete first, then re-import the
+  # pre-existing content on top of a clean slate.
+  defaults -currentHost delete "$DOMAIN" 2>/dev/null || true
+  if [[ "$HAD_DOMAIN" == "1" ]]; then
+    defaults -currentHost import "$DOMAIN" "$BACKUP" 2>/dev/null || true
+  fi
+  rm -f "$BACKUP"
+}
+trap restore_defaults EXIT
+
+defaults -currentHost write "$DOMAIN" accentIndex -int 0
+defaults -currentHost write "$DOMAIN" movement -string "mechanical"
+defaults -currentHost write "$DOMAIN" use24Hour -bool false
+defaults -currentHost write "$DOMAIN" burnInProtection -bool true
+defaults -currentHost write "$DOMAIN" nightDimming -bool true
+
 SDK=$(xcrun --sdk macosx --show-sdk-path)
 mkdir -p build
 swiftc Sources/Palette.swift Sources/FormzeitDefaults.swift Sources/FormzeitRenderer.swift Audit/main.swift \

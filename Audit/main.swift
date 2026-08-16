@@ -28,7 +28,7 @@ guard let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, b
 let when = Date(timeIntervalSince1970: 1786820400)
 let defaults = FormzeitDefaults()
 FormzeitRenderer.render(context: ctx, bounds: CGRect(x: 0, y: 0, width: W, height: H),
-                        now: when, isPreview: false, defaults: defaults, runStart: when)
+                        now: when, elapsedRunTime: 0, isPreview: false, defaults: defaults)
 
 guard let image = ctx.makeImage(), let dp = image.dataProvider, let pix = dp.data,
       let base = CFDataGetBytePtr(pix) else { print("no image"); exit(1) }
@@ -136,7 +136,7 @@ print(String(format: "dial centre (%.1f, %.1f)  R=%.1f px   glyph blobs found: %
 // converted back into the quantity it was supposed to encode: the ring
 // radius the glyph's cap line implies, and its offset from the hour ray.
 // Those *are* comparable, so any spread between them is real misplacement.
-let auditFont = NSFont(name: "Futura Medium", size: R * FormzeitRenderer.numeralFontScale)!
+let auditFont = FormzeitRenderer.numeralFont(size: R * FormzeitRenderer.numeralFontScale, medium: true)
 func inkBounds(_ s: String) -> CGRect {
     CTLineGetBoundsWithOptions(
         CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: [.font: auditFont])),

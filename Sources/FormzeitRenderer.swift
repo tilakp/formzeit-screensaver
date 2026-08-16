@@ -29,10 +29,10 @@ enum FormzeitRenderer {
     // test harness, where a single deterministic frame is all that's needed
     // and the cost of one frame doesn't matter.
 
-    static func render(context: CGContext, bounds: CGRect, now: Date, isPreview: Bool,
-                        defaults: FormzeitDefaults, runStart: Date) {
-        renderFace(context: context, bounds: bounds, now: now, isPreview: isPreview, defaults: defaults, runStart: runStart)
-        renderHands(context: context, bounds: bounds, now: now, isPreview: isPreview, defaults: defaults, runStart: runStart)
+    static func render(context: CGContext, bounds: CGRect, now: Date, elapsedRunTime: TimeInterval, isPreview: Bool,
+                        defaults: FormzeitDefaults) {
+        renderFace(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview, defaults: defaults)
+        renderHands(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview, defaults: defaults)
     }
 
     /// Background, bezel, dial texture, ticks, and numerals — everything
@@ -40,8 +40,8 @@ enum FormzeitRenderer {
     /// background fill is included) so a cached copy of this pass can be
     /// blitted straight over whatever was on screen with no alpha
     /// compositing, and hands drawn on top of that each frame.
-    static func renderFace(context: CGContext, bounds: CGRect, now: Date, isPreview: Bool,
-                            defaults: FormzeitDefaults, runStart: Date) {
+    static func renderFace(context: CGContext, bounds: CGRect, now: Date, elapsedRunTime: TimeInterval, isPreview: Bool,
+                            defaults: FormzeitDefaults) {
         context.setFillColor(DialPalette.background.cgColor)
         context.fill(bounds)
 
@@ -49,7 +49,7 @@ enum FormzeitRenderer {
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let radius = side * 0.44
 
-        let lighting = Lighting(now: now, isPreview: isPreview, runStart: runStart, defaults: defaults)
+        let lighting = Lighting(now: now, isPreview: isPreview, elapsedRunTime: elapsedRunTime, defaults: defaults)
         let drift = driftOffset(now: now, isPreview: isPreview, side: side, defaults: defaults)
 
         context.saveGState()
@@ -70,13 +70,13 @@ enum FormzeitRenderer {
     /// per second; dim/glow: ramps over minutes) that the mismatch between a
     /// several-second-old cached face and a live hands pass is never
     /// visible, so there's no need to thread cached values through.
-    static func renderHands(context: CGContext, bounds: CGRect, now: Date, isPreview: Bool,
-                             defaults: FormzeitDefaults, runStart: Date) {
+    static func renderHands(context: CGContext, bounds: CGRect, now: Date, elapsedRunTime: TimeInterval, isPreview: Bool,
+                             defaults: FormzeitDefaults) {
         let side = min(bounds.width, bounds.height)
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let radius = side * 0.44
 
-        let lighting = Lighting(now: now, isPreview: isPreview, runStart: runStart, defaults: defaults)
+        let lighting = Lighting(now: now, isPreview: isPreview, elapsedRunTime: elapsedRunTime, defaults: defaults)
         let drift = driftOffset(now: now, isPreview: isPreview, side: side, defaults: defaults)
 
         context.saveGState()
@@ -136,7 +136,18 @@ enum FormzeitRenderer {
         ///    unattended stretch keeps lowering luminance rather than holding a
         ///    bright static-ish image indefinitely.
         /// Never dims below a floor — this stays legible as an always-on clock.
-        init(now: Date, isPreview: Bool, runStart: Date, defaults: FormzeitDefaults) {
+        ///
+        /// `elapsedRunTime` must come from a monotonic clock (e.g.
+        /// `ProcessInfo.processInfo.systemUptime`), not `Date` subtraction —
+        /// a wall clock can step backward (NTP correction, sleep/wake drift,
+        /// a manual time change), and on a screensaver meant to run
+        /// unattended for hours that's not a hypothetical. A backward step
+        /// on `Date`-based elapsed time here would snap dimming back to full
+        /// brightness, the opposite of what burn-in protection is for.
+        /// `now` (wall-clock) is still correct and required for the
+        /// night-window check just below, which genuinely needs calendar
+        /// time, not elapsed time.
+        init(now: Date, isPreview: Bool, elapsedRunTime: TimeInterval, defaults: FormzeitDefaults) {
             guard !isPreview else { dim = 1.0; glow = 0.0; return }
 
             var factor: CGFloat = 1.0
@@ -153,7 +164,7 @@ enum FormzeitRenderer {
             }
 
             if defaults.burnInProtection {
-                let elapsed = now.timeIntervalSince(runStart)
+                let elapsed = elapsedRunTime
                 let rampStart = 300.0   // start easing off after 5 minutes
                 let rampEnd = 1800.0    // reach floor by 30 minutes
                 let floor = 0.45
@@ -363,7 +374,12 @@ enum FormzeitRenderer {
         }
     }
 
-    private static func numeralFont(size: CGFloat, medium: Bool) -> NSFont {
+    // Not private: the audit tool (compiled into the same module) reuses this
+    // exact fallback chain rather than force-unwrapping Futura Medium itself
+    // — a machine without that font resident (a clean CI runner, for
+    // instance) would otherwise crash the audit rather than degrade like the
+    // shipped renderer does.
+    static func numeralFont(size: CGFloat, medium: Bool) -> NSFont {
         NSFont(name: medium ? "Futura Medium" : "Futura", size: size)
             ?? NSFont(name: "Futura", size: size)
             ?? NSFont.systemFont(ofSize: size, weight: medium ? .medium : .regular)
