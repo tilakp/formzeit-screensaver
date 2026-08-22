@@ -1,18 +1,36 @@
 # Formzeit
 
-A quiet, Bauhaus-inspired analog clock screensaver for macOS — a native `.saver` bundle written in Swift, built entirely from the command line with no Xcode project.
+A quiet macOS screensaver — a native `.saver` bundle written in Swift, built entirely from the command line with no Xcode project. Four faces, a shared day/night color system, and no Interface Builder anywhere in the settings panel.
 
-Design language borrows from the Braun BC12 wall clock: a single ring where hour numerals and minute ticks share one radial band, matte near-black dial, white hour/minute hands, and an amber-yellow sweep second hand.
+![Eclipse](docs/eclipse.png)
 
-![Formzeit](docs/screenshot.png)
+Eclipse (the default face): a matte plate occludes a field of light, and hands and hour marks are cuts through that plate rather than painted shapes — their brightness comes from where the light sits behind them.
+
+| Strata | Filament | Classic |
+|---|---|---|
+| ![Strata](docs/strata.png) | ![Filament](docs/filament.png) | ![Classic](docs/classic.png) |
+
+Eclipse across the day — the same face, same moment on the clock, two hours apart from each other in the diel color curve:
+
+| 08:00 | 22:00 |
+|---|---|
+| ![Eclipse at 08:00](docs/eclipse-morning.png) | ![Eclipse at 22:00](docs/eclipse-night.png) |
 
 ## Features
 
-- **Single-ring dial** — numerals and ticks sit in the same band, not on separate rings, so hands have real clearance and nothing crowds the rim.
-- **Three movements** — Quartz (1 Hz tick with a small spring overshoot-and-settle), Mechanical (stepped sweep), Digital (continuous sweep).
-- **6 curated accent colors**, 12/24-hour display, from a native settings panel (no Interface Builder).
-- **Burn-in aware** — the whole face drifts slowly along an organic path, and brightness auto-dims after long idle periods, down to a floor (never fully dark, so it still reads as a clock).
-- **Automatic night dimming** (10pm–7am) that eases into a soft colored glow on the hands and numerals rather than just flattening the brightness.
+Four faces, chosen from the settings panel:
+
+- **Eclipse** (default) — a matte plate occludes a field of light; hands and hour marks are cuts through the plate at one of four depths, so their brightness comes from where the orbiting light source sits behind them, not from any animated highlight.
+- **Strata** — three concentric hairline gauge arcs (seconds/minutes/hours), each a tail-ramp running from nearly invisible to full light at its head, with a large ultralight monospaced time readout at center.
+- **Filament** — sixty radial filaments, one per second; the current second ignites to full brightness and decays over ~6s into a short comet that circles once a minute, with steady minute/hour filaments reaching further inward.
+- **Classic** — the original Braun BC12-inspired dial (single-ring numerals/ticks, three movements, machined-metal hand shading), kept for anyone who prefers it.
+
+Shared across all four:
+
+- **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour.
+- **Three movements** — Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical (stepped sweep), Sweep (continuous).
+- 12/24-hour display, optional hour numerals (on the aperture faces, drawn rather than punched), from a native settings panel with a live preview (no Interface Builder).
+- **Burn-in aware** — on Eclipse/Strata/Filament, the light source itself orbits slowly rather than translating a static image; brightness also auto-dims after long idle periods, down to a floor (never fully dark, so it still reads as a clock). Classic keeps its original organic-drift approach.
 
 ## Requirements
 
@@ -52,8 +70,8 @@ A build-from-source bundle never gets the quarantine flag in the first place (it
 
 ## Development
 
-- `./preview.sh [seconds] [width] [height]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design.
-- `./audit.sh` — a geometry audit, not a visual one: it renders the dial into a bitmap and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick clearance) rather than relying on eyeballing a screenshot.
+- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face/world/accent other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `strata`/`filament`/`classic`) beforehand.
+- `./audit.sh` — a numerical audit, not a visual one: it renders the Classic dial into a bitmap and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick clearance) rather than relying on eyeballing a screenshot, plus an informational Eclipse mean-frame-luminance sweep across the day/night color curve.
 
 ## How it's built
 

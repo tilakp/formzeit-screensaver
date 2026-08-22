@@ -27,6 +27,11 @@ guard let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, b
 // the numeral geometry, and hand pixels are filtered out below.
 let when = Date(timeIntervalSince1970: 1786820400)
 let defaults = FormzeitDefaults()
+// This audit's geometry checks are all Classic-dial constants (ring/tick/
+// numeral placement); audit.sh pins the real settings domain to `face =
+// classic` for the run, but pin it here too so the tool is self-contained
+// if run against a domain that was never touched.
+defaults.face = .classic
 FormzeitRenderer.render(context: ctx, bounds: CGRect(x: 0, y: 0, width: W, height: H),
                         now: when, elapsedRunTime: 0, isPreview: false, defaults: defaults)
 
@@ -61,9 +66,9 @@ let R = CGFloat(min(W, H)) * 0.44
 // not detected by brightness: a glyph's own antialiased edge falls in the
 // same brightness range as a tick, which made every measured clearance come
 // out as 1px regardless of the real spacing.
-let tickOuter = R * FormzeitRenderer.tickOuterEdge
-let tickInner = tickOuter - R * FormzeitRenderer.tickLength
-let tickHalfW = R * FormzeitRenderer.tickWidth / 2
+let tickOuter = R * ClassicFace.tickOuterEdge
+let tickInner = tickOuter - R * ClassicFace.tickLength
+let tickHalfW = R * ClassicFace.tickWidth / 2
 struct Tick { let ax: CGFloat, ay: CGFloat, bx: CGFloat, by: CGFloat }
 let ticks: [Tick] = (0..<60).filter { $0 % 5 != 0 }.map { i in
     let phi = CGFloat.pi / 2 - CGFloat(i) / 60 * 2 * .pi
@@ -136,7 +141,7 @@ print(String(format: "dial centre (%.1f, %.1f)  R=%.1f px   glyph blobs found: %
 // converted back into the quantity it was supposed to encode: the ring
 // radius the glyph's cap line implies, and its offset from the hour ray.
 // Those *are* comparable, so any spread between them is real misplacement.
-let auditFont = FormzeitRenderer.numeralFont(size: R * FormzeitRenderer.numeralFontScale, medium: true)
+let auditFont = ClassicFace.numeralFont(size: R * ClassicFace.numeralFontScale, medium: true)
 func inkBounds(_ s: String) -> CGRect {
     CTLineGetBoundsWithOptions(
         CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: [.font: auditFont])),
@@ -212,10 +217,66 @@ print(String(format: "min gap          %.5f R   (tick clearance; want > 0.010)",
 // Numerals and ticks are meant to be centred on the same circle and to be
 // comparable in size, the way they are on the reference clock.
 let meanRing = implied.reduce(0, +) / CGFloat(implied.count)
-let tickBandCentre = FormzeitRenderer.tickOuterEdge - FormzeitRenderer.tickLength / 2
+let tickBandCentre = ClassicFace.tickOuterEdge - ClassicFace.tickLength / 2
 let capH = auditFont.capHeight / R
 print("")
 print(String(format: "numeral ring     %.4f R   vs tick band centre %.4f R  (offset %+.4f R)",
              meanRing, tickBandCentre, meanRing - tickBandCentre))
 print(String(format: "numeral capH     %.4f R   vs tick length      %.4f R  (ratio %.2fx)",
-             capH, FormzeitRenderer.tickLength, capH / FormzeitRenderer.tickLength))
+             capH, ClassicFace.tickLength, capH / ClassicFace.tickLength))
+
+// MARK: - §8 performance budget: Eclipse mean frame luminance
+//
+// Informational, not asserted — a hard ≤6%/≤12% pass/fail needs display-
+// referred luminance and a broader time sweep than is worth building into
+// this tool right now. This renders Eclipse at a few points across the diel
+// curve and reports mean pixel luminance so a regression that blows past
+// the budget (e.g. an accidentally opaque plate) is at least visible here.
+//
+// Measured at a real screen aspect ratio (3008x1692, the resolution §11.4
+// names), not the square 2000x2000 canvas the geometry audit above uses —
+// the field gradient's falloff radius is a fraction of `S = min(w,h)`, so a
+// square canvas puts proportionally more of the frame inside the bright
+// falloff than a real widescreen display would. Measuring square
+// overstates luminance and would chase a budget the shipped renderer never
+// actually approaches.
+func meanLuminance(face: FaceKind, hour: Int, minute: Int, w: Int, h: Int) -> Double {
+    guard let c2 = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+    let d2 = FormzeitDefaults()
+    d2.face = face
+    var comps = DateComponents()
+    comps.year = 2026; comps.month = 1; comps.day = 1; comps.hour = hour; comps.minute = minute
+    let date = Calendar.current.date(from: comps) ?? Date()
+    // elapsedRunTime must be past wake-in (§6, ~1.4s to fully reveal) and
+    // well before the idle burn-in ramp engages (300s) — 0 would measure
+    // the wake-in veil's opening (deliberately black) frame instead of
+    // steady-state brightness.
+    FormzeitRenderer.render(context: c2, bounds: CGRect(x: 0, y: 0, width: w, height: h),
+                             now: date, elapsedRunTime: 10, isPreview: false, defaults: d2)
+    guard let img = c2.makeImage(), let dp2 = img.dataProvider, let pix2 = dp2.data,
+          let base2 = CFDataGetBytePtr(pix2) else { return 0 }
+    let bpr2 = img.bytesPerRow, bpp2 = img.bitsPerPixel / 8
+    var total: UInt64 = 0
+    let stride = 4 // sample every 4th pixel in each axis — plenty for a mean
+    var count = 0
+    var y = 0
+    while y < h {
+        var x = 0
+        while x < w {
+            let o = y * bpr2 + x * bpp2
+            total += UInt64(base2[o]) + UInt64(base2[o + 1]) + UInt64(base2[o + 2])
+            count += 3
+            x += stride
+        }
+        y += stride
+    }
+    return Double(total) / Double(count) / 255.0
+}
+
+print("")
+print("eclipse mean luminance by hour, 3008x1692 (§8 targets: <=6% night, <=12% day)")
+for (label, h, m) in [("00:00", 0, 0), ("07:30", 7, 30), ("12:00", 12, 0), ("18:30", 18, 30), ("22:00", 22, 0)] {
+    let l = meanLuminance(face: .eclipse, hour: h, minute: m, w: 3008, h: 1692)
+    print(String(format: "  %@  %.2f%%", label, l * 100))
+}

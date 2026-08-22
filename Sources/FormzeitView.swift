@@ -53,6 +53,32 @@ public final class FormzeitView: ScreenSaverView {
     private func commonInit() {
         wantsLayer = true
         animationTimeInterval = 1.0 / 30.0
+
+        NotificationCenter.default.addObserver(self, selector: #selector(handleExternalCacheInvalidation),
+                                                name: .formzeitSettingsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleExternalCacheInvalidation),
+                                                name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                                                object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    /// A settings change (face/world/accent/... from the configure sheet)
+    /// or a live accessibility-preference change (§9 — reduce motion,
+    /// increase contrast) should reach the screen immediately rather than
+    /// waiting out `faceCacheRefreshInterval`.
+    @objc private func handleExternalCacheInvalidation() {
+        invalidateFaceCache()
+    }
+
+    /// Forces the next frame to regenerate the cached face/field pass.
+    /// Exposed so the settings sheet's live preview can invalidate on every
+    /// settings change instead of waiting out the interval below.
+    func invalidateFaceCache() {
+        faceCacheGeneratedAtUptime = -.infinity
+        needsDisplay = true
     }
 
     public override func startAnimation() {

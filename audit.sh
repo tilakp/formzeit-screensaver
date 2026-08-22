@@ -42,10 +42,19 @@ defaults -currentHost write "$DOMAIN" movement -string "mechanical"
 defaults -currentHost write "$DOMAIN" use24Hour -bool false
 defaults -currentHost write "$DOMAIN" burnInProtection -bool true
 defaults -currentHost write "$DOMAIN" nightDimming -bool true
+defaults -currentHost write "$DOMAIN" face -string "classic"
+defaults -currentHost write "$DOMAIN" world -string "ember"
+defaults -currentHost write "$DOMAIN" accent -string "adaptive"
 
 SDK=$(xcrun --sdk macosx --show-sdk-path)
 mkdir -p build
-swiftc Sources/Palette.swift Sources/FormzeitDefaults.swift Sources/FormzeitRenderer.swift Audit/main.swift \
+# Every v2 face lives across Sources/*.swift now (Palette/Lighting/ClassicFace/
+# EclipseFace/StrataFace/FilamentFace/FormzeitRenderer/FormzeitDefaults), so
+# the audit tool compiles the same file set build.sh does, plus Audit/main.swift.
+# It does not need ConfigureSheetController.swift or FormzeitView.swift (no
+# NSPrincipalClass/UI is instantiated here), but those aren't excluded for
+# simplicity — they compile standalone with no side effects at audit time.
+swiftc Sources/*.swift Audit/main.swift \
   -O -o build/audit -target arm64-apple-macosx12.0 -sdk "$SDK" \
   -framework Cocoa -framework ScreenSaver -framework QuartzCore
 
