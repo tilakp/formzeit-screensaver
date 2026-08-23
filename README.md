@@ -17,7 +17,7 @@ With "Follow the day" on, the dial switches to a night plate between 22:00 and 0
 
 ![Night plates](docs/night-plates.png)
 
-The second hand and the hub's centre dome — the two parts belonging to the seconds train — take their colour from **Accent**. Adaptive leaves them matching the other two hands; the six fixed hues tint both.
+The second hand and the hub's boss ring take their colour from **Accent**. Adaptive leaves them matching the other two hands; the six fixed hues tint both, with the dark bearing ring and pale centre dome kept inside the colour and the white collar framing it outside.
 
 Four alternative faces, chosen from the settings panel:
 

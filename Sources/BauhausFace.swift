@@ -621,37 +621,35 @@ enum BauhausFace {
         context.setFillColor(base.cgColor)
         context.fillEllipse(in: circleRect(center, br))
         context.restoreGState()
-        domeFill(br, base.blended(withFraction: 0.30, of: NSColor(hex: "#bcc9c9")) ?? base,
-                 base.blended(withFraction: 0.60, of: .white) ?? base)
+        if let tint = tint?.blended(dim: dim) {
+            // Raised, so the normal orientation: brighter on the side facing
+            // the light. The dark bearing ring and pale dome inside it stay
+            // as they were, which is what keeps the centre from going flat.
+            domeFill(br, tint.blended(withFraction: 0.30, of: .black) ?? tint,
+                     tint.blended(withFraction: 0.42, of: .white) ?? tint)
+        } else {
+            domeFill(br, base.blended(withFraction: 0.30, of: NSColor(hex: "#bcc9c9")) ?? base,
+                     base.blended(withFraction: 0.60, of: .white) ?? base)
+        }
         context.setStrokeColor(NSColor(calibratedRed: 0.17, green: 0.31, blue: 0.31, alpha: 0.16).cgColor)
         context.setLineWidth(max(0.5, br * 0.05))
         context.strokeEllipse(in: circleRect(center, br))
 
         // 3. Bearing annulus — sunk into the boss, so it is lit on the
-        //    lower-right, the inverse of every raised part above.
+        //    lower-right, the inverse of every raised part above. Note the
+        //    swapped argument order below: domeFill's second colour is the
+        //    one facing the light, and on a recess that's the darker of the
+        //    two. Keep that inversion whichever colours go in, or the ring
+        //    pops out of the plate instead of sinking into it.
         let ao = r * 0.44
         let ringLo = palette.isDark ? NSColor(hex: "#080c0f") : NSColor(hex: "#5e6d6d")
         let ringHi = palette.isDark ? NSColor(hex: "#39434c") : NSColor(hex: "#97a5a5")
         domeFill(ao, ringHi.blended(dim: dim), ringLo.blended(dim: dim))
 
-        // 4. Centre dome seated in the ring.
+        // 4. Pale centre dome seated in the ring.
         let ai = r * 0.30
-        if let tint = tint?.blended(dim: dim) {
-            // Shade a saturated dome toward black/white rather than through
-            // the cool grey the pale version uses — that grey is what gives
-            // white its metal read, but it desaturates a hue to putty.
-            //
-            // On a lume plate the shaded half is pulled up hard: a dot this
-            // small, shaded 30% toward black, loses its lower edge into a
-            // near-black plate and stops reading as a dome at all.
-            let lo: CGFloat = palette.isLume ? 0.12 : 0.30
-            let hi: CGFloat = palette.isLume ? 0.52 : 0.42
-            domeFill(ai, tint.blended(withFraction: lo, of: .black) ?? tint,
-                     tint.blended(withFraction: hi, of: .white) ?? tint)
-        } else {
-            domeFill(ai, base.blended(withFraction: 0.34, of: NSColor(hex: "#9fb0b0")) ?? base,
-                     base.blended(withFraction: 0.70, of: .white) ?? base)
-        }
+        domeFill(ai, base.blended(withFraction: 0.34, of: NSColor(hex: "#9fb0b0")) ?? base,
+                 base.blended(withFraction: 0.70, of: .white) ?? base)
     }
 
     // MARK: - Small helpers
