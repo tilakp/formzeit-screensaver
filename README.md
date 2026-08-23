@@ -4,7 +4,16 @@ A quiet macOS screensaver — a native `.saver` bundle written in Swift, built e
 
 ![Bauhaus](docs/bauhaus.png)
 
-Bauhaus (the default face): a flat-colour plate with numerals and markers pressed *into* the surface, raised white hands carrying a recessed lume channel, and a layered centre hub — on a finely grained plaster ground. Eight plates, from Lagoon through Slate.
+**Bauhaus — the default face.** A flat-colour plate where the numerals and the sixty markers are pressed *into* the surface, while the hands and centre hub sit raised above it and cast onto it. Both cues come from one fixed light: a recess catches a pale rim on its lower-right inner wall, a raised part throws its shadow the other way. The hands are white batons with a recessed lume channel; the hub is four stacked layers. Underneath it all is a fine plaster grain, at a strength you can actually see — that texture is what keeps a flat fill from reading as a computer-drawn circle.
+
+Eight plates:
+
+| | | | |
+|---|---|---|---|
+| ![Lagoon](docs/plates/lagoon.png)<br>**Lagoon** | ![Pistachio](docs/plates/pistachio.png)<br>**Pistachio** | ![Cream](docs/plates/cream.png)<br>**Cream** | ![Sky](docs/plates/sky.png)<br>**Sky** |
+| ![Salmon](docs/plates/salmon.png)<br>**Salmon** | ![Yellow](docs/plates/yellow.png)<br>**Yellow** | ![Beige](docs/plates/beige.png)<br>**Beige** | ![Slate](docs/plates/slate.png)<br>**Slate** |
+
+With "Follow the day" on, the dial switches to Slate overnight.
 
 Four alternative faces, chosen from the settings panel:
 
