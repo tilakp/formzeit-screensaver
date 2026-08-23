@@ -25,19 +25,24 @@ enum BauhausFace {
         let key: String
         let name: String
         let bg: NSColor      // the plate
-        let mark: NSColor    // numerals, markers, second hand
+        let mark: NSColor    // numerals, markers
         let lume: NSColor    // the hands' recessed channel
         let hand: NSColor    // hand + hub body
         let isDark: Bool
+        /// A lume plate: the marks read as *emitting* light rather than as
+        /// recesses catching it. Flips the depth model — see `deboss`.
+        let isLume: Bool
 
-        init(_ key: String, _ name: String, bg: String, mark: String, lume: String, hand: String, isDark: Bool = false) {
+        init(_ key: String, _ name: String, bg: String, mark: String, lume: String, hand: String,
+             isDark: Bool = false, isLume: Bool = false) {
             self.key = key; self.name = name
             self.bg = NSColor(hex: bg); self.mark = NSColor(hex: mark)
             self.lume = NSColor(hex: lume); self.hand = NSColor(hex: hand)
-            self.isDark = isDark
+            self.isDark = isDark; self.isLume = isLume
         }
 
-        static let all: [Palette] = [
+        /// The plates offered as the daytime dial.
+        static let day: [Palette] = [
             Palette("lagoon",    "Lagoon",    bg: "#a9d9d2", mark: "#0e4b48", lume: "#dcf1f5", hand: "#fbfdfd"),
             Palette("pistachio", "Pistachio", bg: "#d7e3c2", mark: "#233b20", lume: "#f2f8e8", hand: "#fdfdfa"),
             Palette("cream",     "Cream",     bg: "#ece0cb", mark: "#3b3226", lume: "#faf4ea", hand: "#fffdf9"),
@@ -48,19 +53,39 @@ enum BauhausFace {
             Palette("slate",     "Slate",     bg: "#20272e", mark: "#aebdc9", lume: "#46545f", hand: "#e6ecf1", isDark: true),
         ]
 
+        /// The plates offered for the overnight window. Slate is the plain
+        /// one: a dark dial, still lit from outside. The five lume plates
+        /// invert that — the marks and the hands' channel are the only light
+        /// in the frame, so `hand` is a muted steel rather than white, or the
+        /// baton bodies would outshine the lume they carry.
+        static let night: [Palette] = [
+            Palette("slate",        "Slate",    bg: "#20272e", mark: "#aebdc9", lume: "#46545f", hand: "#e6ecf1", isDark: true),
+            Palette("lumeGreen",    "Green",    bg: "#12181a", mark: "#57d493", lume: "#8dffc0", hand: "#7f8f95", isDark: true, isLume: true),
+            Palette("lumeBlue",     "Blue",     bg: "#0f151d", mark: "#5cb9e8", lume: "#a8e2ff", hand: "#7c8b98", isDark: true, isLume: true),
+            Palette("lumeAmber",    "Amber",    bg: "#191309", mark: "#e0a44e", lume: "#ffcf85", hand: "#948a7c", isDark: true, isLume: true),
+            Palette("lumeRed",      "Red",      bg: "#180f0e", mark: "#e07360", lume: "#ff9d8a", hand: "#93837f", isDark: true, isLume: true),
+            Palette("lumeLavender", "Lavender", bg: "#14111d", mark: "#a893e8", lume: "#d0bcff", hand: "#8a8598", isDark: true, isLume: true),
+        ]
+
+        static let all: [Palette] = day + night.dropFirst() // Slate is in both
+
         static func named(_ key: String) -> Palette {
             all.first { $0.key == key } ?? all[0]
         }
+
+        static func nightNamed(_ key: String) -> Palette {
+            night.first { $0.key == key } ?? night[0]
+        }
     }
 
-    /// Which palette to actually draw. "Follow the day" swaps to the dark
-    /// Slate plate overnight rather than dimming a bright pastel toward mud
+    /// Which palette to actually draw. "Follow the day" swaps to the chosen
+    /// night plate overnight rather than dimming a bright pastel toward mud
     /// — a light dial dimmed 70% reads as dirty, not as night.
     static func activePalette(now: Date, isPreview: Bool, defaults: FormzeitDefaults) -> Palette {
         let chosen = Palette.named(defaults.bauhausPalette)
         guard defaults.nightDimming, !isPreview, !chosen.isDark else { return chosen }
         let h = Calendar.current.component(.hour, from: now)
-        return (h >= 22 || h < 7) ? Palette.named("slate") : chosen
+        return (h >= 22 || h < 7) ? Palette.nightNamed(defaults.bauhausNightPalette) : chosen
     }
 
     // MARK: - Light
@@ -78,7 +103,7 @@ enum BauhausFace {
     static let numeralRing: CGFloat = 0.735
     static let numeralScale: CGFloat = 0.178
     static let hourLen: CGFloat = 0.47,  hourHalf: CGFloat = 0.034
-    static let minuteLen: CGFloat = 0.73, minuteHalf: CGFloat = 0.030
+    static let minuteLen: CGFloat = 0.73, minuteHalf: CGFloat = 0.0258
     static let secondLen: CGFloat = 0.80
     static let hubR: CGFloat = 0.050
 
@@ -140,7 +165,8 @@ enum BauhausFace {
                  length: g.R * hourLen, halfW: g.R * hourHalf, palette: p, dim: dim)
         drawHand(context: context, center: g.center, R: g.R, angle: minuteAngle,
                  length: g.R * minuteLen, halfW: g.R * minuteHalf, palette: p, dim: dim)
-        drawSecondHand(context: context, center: g.center, R: g.R, angle: secondAngle, palette: p, dim: dim)
+        drawSecondHand(context: context, center: g.center, R: g.R, angle: secondAngle, palette: p, dim: dim,
+                       color: secondHandColor(palette: p, defaults: defaults))
         drawHub(context: context, center: g.center, R: g.R, palette: p, dim: dim)
 
         context.restoreGState()
@@ -305,7 +331,26 @@ enum BauhausFace {
 
     /// Draws `shape` as a recess: a pale rim peeking out on the lower-right
     /// (away from the upper-left light), then the dark ink on top.
-    private static func deboss(context: CGContext, R: CGFloat, ink: NSColor, _ shape: (CGContext) -> Void) {
+    ///
+    /// On a lume plate the depth model inverts. A mark that emits light isn't
+    /// a recess catching an external source, so the pale down-right rim is
+    /// wrong there — it reads as a printing misregistration on a dark plate.
+    /// Those marks get a symmetric halo of their own colour instead.
+    private static func deboss(context: CGContext, R: CGFloat, ink: NSColor, glow: NSColor?,
+                                _ shape: (CGContext) -> Void) {
+        if let glow = glow {
+            context.saveGState()
+            // Zero offset: light from the mark itself spreads evenly. Blur is
+            // kept tight — a wide halo washes the plate grey and costs real
+            // time, since blur is roughly linear in radius and this runs once
+            // per mark.
+            context.setShadow(offset: .zero, blur: max(1.5, R * 0.012),
+                              color: glow.withAlphaComponent(0.55).cgColor)
+            context.setFillColor(ink.cgColor)
+            shape(context)
+            context.restoreGState()
+            return
+        }
         // Keep this small and soft. Too far or too opaque and the pale rim
         // stops reading as a lit recess wall and starts reading as badly
         // registered two-colour printing.
@@ -328,8 +373,12 @@ enum BauhausFace {
             let len = R * (isFive ? markerLenFive : markerLenMinute)
             let halfW = R * (isFive ? markerHalfFive : markerHalfMinute)
             let angle = CGFloat(i) / 60.0 * 2 * .pi
+            // Only the twelve hour markers glow. The 48 minute ticks are a
+            // fifth the area, so a halo on them barely reads — and it would
+            // quadruple the number of blurred fills in this pass.
+            let glow = (palette.isLume && isFive) ? palette.lume : nil
 
-            deboss(context: context, R: R, ink: ink) { ctx in
+            deboss(context: context, R: R, ink: ink, glow: glow) { ctx in
                 ctx.saveGState()
                 ctx.translateBy(x: center.x, y: center.y)
                 ctx.rotate(by: -angle) // y-up: clockwise from 12
@@ -365,7 +414,7 @@ enum BauhausFace {
             let inkRect = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
             guard !inkRect.isNull else { continue }
 
-            deboss(context: context, R: R, ink: ink) { ctx in
+            deboss(context: context, R: R, ink: ink, glow: palette.isLume ? palette.lume : nil) { ctx in
                 ctx.saveGState()
                 ctx.translateBy(x: point.x, y: point.y)
                 ctx.textMatrix = .identity
@@ -399,14 +448,18 @@ enum BauhausFace {
 
         // Shadow pass. The offset is set in the UNROTATED frame so it stays
         // down-right on screen whichever way the hand points.
+        //
+        // Skipped entirely on a lume plate: a dark shadow on a near-black
+        // plate is invisible, and blur is the single most expensive thing in
+        // this pass — cost runs roughly linear in radius, and a shadowed fill
+        // is ~50x an unshadowed one. On the light plates 1.15 keeps the
+        // contact shadow reading while costing about half what 2.3 did.
         context.saveGState()
-        // Blur is the single most expensive thing in this pass — cost runs
-        // roughly linear in radius, and a shadowed fill is ~50x an unshadowed
-        // one. 1.15 keeps the contact shadow reading while costing about half
-        // what 2.3 did.
-        context.setShadow(offset: CGSize(width: halfW * 0.30, height: -halfW * 0.55),
-                          blur: halfW * 1.15,
-                          color: NSColor(calibratedRed: 0.09, green: 0.23, blue: 0.22, alpha: 0.34).cgColor)
+        if !palette.isLume {
+            context.setShadow(offset: CGSize(width: halfW * 0.30, height: -halfW * 0.55),
+                              blur: halfW * 1.15,
+                              color: NSColor(calibratedRed: 0.09, green: 0.23, blue: 0.22, alpha: 0.34).cgColor)
+        }
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: theta)
         context.setFillColor(base.cgColor)
@@ -453,8 +506,22 @@ enum BauhausFace {
             let lume = palette.lume.blended(dim: dim)
             // Shallow recess: the lit-side interior edge takes a *whisper* of
             // the lip's shadow. A wide dark wash here turns icy blue to mud.
-            let nearLit = lume.blended(withFraction: 0.20, of: NSColor(hex: "#8fb6bb")) ?? lume
-            let farSide = lume.blended(withFraction: 0.22, of: .white) ?? lume
+            // On a lume plate the shading is nearly flat instead: a charged
+            // lume pip is uniformly bright, and shading it like a recess is
+            // what makes painted-on lume look painted on.
+            let shade = palette.isLume ? palette.bg : NSColor(hex: "#8fb6bb")
+            let nearLit = lume.blended(withFraction: palette.isLume ? 0.08 : 0.20, of: shade) ?? lume
+            let farSide = lume.blended(withFraction: palette.isLume ? 0.10 : 0.22, of: .white) ?? lume
+            if palette.isLume {
+                // Two hands a frame, so one blurred fill each — well inside
+                // budget, unlike putting a halo on all 60 markers.
+                context.saveGState()
+                context.setShadow(offset: .zero, blur: max(1.5, halfW * 0.9),
+                                  color: lume.withAlphaComponent(0.6).cgColor)
+                context.setFillColor(lume.cgColor)
+                context.addPath(ch); context.fillPath()
+                context.restoreGState()
+            }
             if let cg = gradient([t >= 0 ? farSide : nearLit, lume, t >= 0 ? nearLit : farSide], [0, 0.5, 1]) {
                 context.saveGState()
                 context.addPath(ch); context.clip()
@@ -469,16 +536,28 @@ enum BauhausFace {
         context.restoreGState()
     }
 
+    /// The one place a Bauhaus dial takes a colour that isn't from its plate.
+    /// Adaptive keeps the hand the same white as the other two — a raised
+    /// part, not a mark cut into the plate; drawn in `mark` it would read as a
+    /// scratch across the dial. Any other accent paints the hairline that hue.
+    static func secondHandColor(palette: Palette, defaults: FormzeitDefaults) -> NSColor {
+        if let hex = defaults.accentV2.hex { return NSColor(hex: hex) }
+        guard palette.isLume else { return palette.hand }
+        // A lume plate's `hand` is a deliberately muted steel so the baton
+        // bodies don't outshine the lume they carry. On a hairline that thin
+        // it's near-invisible against a near-black plate, so the second hand
+        // gets the brighter steel the wide hands can't have.
+        return palette.hand.blended(withFraction: 0.45, of: .white) ?? palette.hand
+    }
+
     private static func drawSecondHand(context: CGContext, center: CGPoint, R: CGFloat, angle: CGFloat,
-                                        palette: Palette, dim: CGFloat) {
+                                        palette: Palette, dim: CGFloat, color: NSColor) {
         // No shadow here on purpose: on a hairline this thin it is not
         // visible, and it measured ~8x the cost of drawing the hand itself.
         context.saveGState()
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: -angle)
-        // White, like the other two hands — it is a raised part, not a mark
-        // cut into the plate. In `mark` it reads as a scratch across the dial.
-        context.setStrokeColor(palette.hand.blended(dim: dim).cgColor)
+        context.setStrokeColor(color.blended(dim: dim).cgColor)
         context.setLineWidth(R * 0.0075)
         context.setLineCap(.round)
         context.move(to: CGPoint(x: 0, y: -R * 0.15))

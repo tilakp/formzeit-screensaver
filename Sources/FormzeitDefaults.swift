@@ -30,7 +30,7 @@ final class FormzeitDefaults {
     /// per open, forever. Registered values read back identically, later
     /// registrations win over earlier ones, and none of it hits disk.
     init(transientFace face: FaceKind, world: ColorWorld, accent: Accent,
-         palette: String = "lagoon") {
+         palette: String = "lagoon", nightPalette: String = "slate") {
         transientSuite = "formzeit.transient.\(UUID().uuidString)"
         store = UserDefaults(suiteName: transientSuite) ?? .standard
         registerFactoryDefaults()
@@ -39,6 +39,7 @@ final class FormzeitDefaults {
             Keys.world: world.rawValue,
             Keys.accent: accent.rawValue,
             Keys.bauhausPalette: palette,
+            Keys.bauhausNightPalette: nightPalette,
         ])
     }
 
@@ -54,6 +55,7 @@ final class FormzeitDefaults {
             Keys.accent: Accent.adaptive.rawValue,
             Keys.showNumerals: false,
             Keys.bauhausPalette: "lagoon",
+            Keys.bauhausNightPalette: "slate",
         ])
     }
 
@@ -88,6 +90,15 @@ final class FormzeitDefaults {
         static let accent = "accent"
         static let showNumerals = "showNumerals"
         static let bauhausPalette = "bauhausPalette"
+        static let bauhausNightPalette = "bauhausNightPalette"
+    }
+
+    /// Which plate the Bauhaus face swaps to during the 22:00-07:00 window
+    /// when "Follow the day" is on: plain Slate, or one of the five lume
+    /// plates. Ignored entirely if the chosen day plate is already dark.
+    var bauhausNightPalette: String {
+        get { store.string(forKey: Keys.bauhausNightPalette) ?? "slate" }
+        set { store.set(newValue, forKey: Keys.bauhausNightPalette); save() }
     }
 
     /// Which flat-colour plate the Bauhaus face draws (Lagoon, Pistachio, …).

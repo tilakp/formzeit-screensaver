@@ -13,7 +13,11 @@ Eight plates:
 | ![Lagoon](docs/plates/lagoon.png)<br>**Lagoon** | ![Pistachio](docs/plates/pistachio.png)<br>**Pistachio** | ![Cream](docs/plates/cream.png)<br>**Cream** | ![Sky](docs/plates/sky.png)<br>**Sky** |
 | ![Salmon](docs/plates/salmon.png)<br>**Salmon** | ![Yellow](docs/plates/yellow.png)<br>**Yellow** | ![Beige](docs/plates/beige.png)<br>**Beige** | ![Slate](docs/plates/slate.png)<br>**Slate** |
 
-With "Follow the day" on, the dial switches to Slate overnight.
+With "Follow the day" on, the dial switches to a night plate between 22:00 and 07:00 — plain Slate, or one of five lume plates, where the depth model inverts. By day a mark is a recess catching an external light. On a lume plate the marks *are* the light: they glow, the hands' channel glows with them, and the baton bodies drop to a muted steel so they don't outshine the lume they carry.
+
+![Night plates](docs/night-plates.png)
+
+The second hand takes its colour from **Accent** — Adaptive leaves it matching the other two hands, or pick any of the six fixed hues.
 
 Four alternative faces, chosen from the settings panel:
 
@@ -31,7 +35,7 @@ Eclipse across the day — the same face, same moment on the clock, two hours ap
 
 Five faces, chosen from the settings panel:
 
-- **Bauhaus** (default) — a flat-colour plate; every mark is debossed (a pale rim on the lower-right where the recess catches the light) while hands and hub are raised and cast onto it. Eight plates: Lagoon, Pistachio, Cream, Sky, Salmon, Yellow, Beige, Slate.
+- **Bauhaus** (default) — a flat-colour plate; every mark is debossed (a pale rim on the lower-right where the recess catches the light) while hands and hub are raised and cast onto it. Eight day plates: Lagoon, Pistachio, Cream, Sky, Salmon, Yellow, Beige, Slate. Six night plates: Slate plus Green, Blue, Amber, Red and Lavender lume.
 - **Classic** — the original Braun BC12-inspired dial (single-ring numerals/ticks, three movements, machined-metal hand shading).
 - **Eclipse** — a matte plate occludes a field of light; hands and hour marks are cuts through the plate at one of four depths, so their brightness comes from where the orbiting light source sits behind them, not from any animated highlight.
 - **Strata** — three concentric hairline gauge arcs (seconds/minutes/hours), each a tail-ramp running from nearly invisible to full light at its head, with a large ultralight monospaced time readout at center.
@@ -39,11 +43,11 @@ Five faces, chosen from the settings panel:
 
 Shared across the faces:
 
-- **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour.
+- **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour. On Bauhaus and Classic the accent is narrower: it colours the second hand only.
 - **Three movements** — Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical (stepped sweep), Sweep (continuous).
-- 12/24-hour display and three movements, from a native settings panel with a live preview. The panel shows only the controls the selected face actually responds to — Plate for Bauhaus, World/Accent for the light-based faces — rather than leaving dead controls on screen.
+- 12/24-hour display and three movements, from a native settings panel with a live preview. The panel shows only the controls the selected face actually responds to — Plate for Bauhaus, World for the light-based faces — rather than leaving dead controls on screen. The night-plate row appears only when there is a swap to make: not with "Follow the day" off, and not when the day plate is already dark.
 - **Burn-in aware** — on Eclipse/Strata/Filament the light source itself orbits rather than translating a static image; Bauhaus and Classic drift the whole composition slowly instead. All faces ease brightness down after a long idle stretch, to a floor rather than to black.
-- **Day and night** — "Follow the day" moves the light-based faces along a 24-hour colour curve. Bauhaus instead switches to its dark Slate plate overnight: multiplying a flat pastel toward black produces grey mud, not a darker mint, so it changes plate rather than dimming.
+- **Day and night** — "Follow the day" moves the light-based faces along a 24-hour colour curve. Bauhaus instead switches to a dark night plate overnight: multiplying a flat pastel toward black produces grey mud, not a darker mint, so it changes plate rather than dimming.
 
 ## Requirements
 
@@ -83,7 +87,7 @@ A build-from-source bundle never gets the quarantine flag in the first place (it
 
 ## Development
 
-- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `bauhaus`/`classic`/`strata`/`filament`) beforehand, and `defaults -currentHost delete com.tilakpatel.formzeit face` to put it back. Bauhaus plates are the `bauhausPalette` key (`lagoon`, `pistachio`, `cream`, `sky`, `salmon`, `yellow`, `beige`, `slate`).
+- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `bauhaus`/`classic`/`strata`/`filament`) beforehand, and `defaults -currentHost delete com.tilakpatel.formzeit face` to put it back. Bauhaus plates are the `bauhausPalette` key (`lagoon`, `pistachio`, `cream`, `sky`, `salmon`, `yellow`, `beige`, `slate`) and `bauhausNightPalette` (`slate`, `lumeGreen`, `lumeBlue`, `lumeAmber`, `lumeRed`, `lumeLavender`). Add `--layers` to capture the CALayer tree rather than `drawRect` — the saver composites its cached face and its live hands as two layers, and the default capture path exercises an offscreen fallback instead of the code that actually runs on screen.
 - `./audit.sh` — a numerical audit, not a visual one: it renders the Classic dial into a bitmap and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick clearance) rather than relying on eyeballing a screenshot, plus an informational Eclipse mean-frame-luminance sweep across the day/night color curve.
 
 ## How it's built

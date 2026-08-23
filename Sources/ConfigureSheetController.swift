@@ -15,12 +15,15 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private var worldButtons: [WorldChipButton] = []
     private var accentButtons: [AccentSwatchButton] = []
     private var plateButtons: [PlateChipButton] = []
+    private var nightPlateButtons: [PlateChipButton] = []
 
     // Held so the colour groups can be shown/hidden per selected face.
     private weak var plateGroup: NSView?
     private weak var worldGroup: NSView?
     private weak var accentGroup: NSView?
     private weak var numeralsRow: NSView?
+    private weak var nightPlateRow: NSView?
+    private weak var accentCaption: NSTextField?
     /// Each row's preceding separator, so hiding a row hides its divider.
     /// Without this, `isHidden` on a row inside a groupBox is layout-inert:
     /// the hand-built constraint chain keeps its space and the NSBox above
@@ -91,7 +94,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         content.translatesAutoresizingMaskIntoConstraints = false
 
         let faceGroup = groupBox("Face", rows: [buildFaceRow()])
-        let plateGroup = groupBox("Plate", rows: [buildPlateRow()])
+        let nightRow = buildNightPlateRow()
+        self.nightPlateRow = nightRow
+        let plateGroup = groupBox("Plate", rows: [buildPlateRow(), nightRow])
         let worldGroup = groupBox("World", rows: [buildWorldRow()])
         let accentGroup = groupBox("Accent", rows: [buildAccentRow()])
         let movementGroup = groupBox("Movement", rows: [buildMovementRow(), buildUse24HourRow(), buildShowNumeralsRow()])
@@ -224,7 +229,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         row.orientation = .horizontal
         row.spacing = 6
         row.distribution = .fillEqually
-        for palette in BauhausFace.Palette.all {
+        for palette in BauhausFace.Palette.day {
             let button = PlateChipButton(palette: palette)
             button.target = self
             button.action = #selector(plateTapped(_:))
@@ -232,7 +237,42 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             row.addArrangedSubview(button)
         }
         updatePlateSelection()
-        return row
+        return captioned("By day", row)
+    }
+
+    /// Both plate rows are rows of identical-looking chips, so without these
+    /// captions the second one just reads as more colours for the same
+    /// setting rather than as what the dial becomes after dark.
+    private func captioned(_ text: String, _ row: NSView) -> NSView {
+        let caption = sublabel(text)
+        caption.font = .systemFont(ofSize: 10.5, weight: .medium)
+        caption.textColor = .tertiaryLabelColor
+        let column = NSStackView(views: [caption, row])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 6
+        // fillEqually rows need to span the group, not hug their content.
+        row.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
+        return column
+    }
+
+    /// What the Bauhaus plate becomes between 22:00 and 07:00. Only reachable
+    /// while "Follow the day" is on and the day plate is a light one — a dark
+    /// day plate never swaps, so there is nothing for this to control.
+    private func buildNightPlateRow() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 6
+        row.distribution = .fillEqually
+        for palette in BauhausFace.Palette.night {
+            let button = PlateChipButton(palette: palette)
+            button.target = self
+            button.action = #selector(nightPlateTapped(_:))
+            nightPlateButtons.append(button)
+            row.addArrangedSubview(button)
+        }
+        updateNightPlateSelection()
+        return captioned("After 22:00 — the lume plates glow instead of reflecting", row)
     }
 
     private func buildAccentRow() -> NSView {
@@ -247,7 +287,21 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             row.addArrangedSubview(button)
         }
         updateAccentSelection()
-        return row
+
+        // Accent means two different things depending on the face — it tints
+        // the whole light on Eclipse/Strata/Filament, but only the second
+        // hand on Bauhaus and Classic. One caption, rewritten per face, so
+        // the picker isn't silently ambiguous.
+        let caption = sublabel("")
+        caption.font = .systemFont(ofSize: 10.5)
+        caption.textColor = .tertiaryLabelColor
+        accentCaption = caption
+
+        let column = NSStackView(views: [row, caption])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 7
+        return column
     }
 
     private func buildMovementRow() -> NSView {
@@ -289,6 +343,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     @objc private func plateTapped(_ sender: PlateChipButton) {
         defaults.bauhausPalette = sender.palette.key
         updatePlateSelection()
+        // Picking Slate as the day plate removes the night swap entirely, so
+        // the night row has to appear and disappear with this choice.
+        updateGroupVisibility()
     }
 
     @objc private func worldTapped(_ sender: WorldChipButton) {
@@ -301,6 +358,11 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         updateAccentSelection()
     }
 
+    @objc private func nightPlateTapped(_ sender: PlateChipButton) {
+        defaults.bauhausNightPalette = sender.palette.key
+        updateNightPlateSelection()
+    }
+
     @objc private func movementChanged(_ sender: NSSegmentedControl) {
         defaults.movement = Movement.allCases[sender.selectedSegment]
     }
@@ -308,7 +370,10 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     @objc private func toggle24Hour(_ sender: NSSwitch) { defaults.use24Hour = sender.state == .on }
     @objc private func toggleShowNumerals(_ sender: NSSwitch) { defaults.showNumerals = sender.state == .on }
     @objc private func toggleMoveLight(_ sender: NSSwitch) { defaults.burnInProtection = sender.state == .on }
-    @objc private func toggleFollowDay(_ sender: NSSwitch) { defaults.nightDimming = sender.state == .on }
+    @objc private func toggleFollowDay(_ sender: NSSwitch) {
+        defaults.nightDimming = sender.state == .on
+        updateGroupVisibility() // the night plate row only applies while this is on
+    }
 
     @objc private func closeSheet() {
         guard let window = window else { return }
@@ -319,16 +384,24 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         for b in faceButtons { b.isSelected = (b.face == defaults.face) }
     }
     /// Bauhaus is painted from a Plate; Eclipse/Strata/Filament are lit by a
-    /// World + Accent. Classic takes its second-hand colour from Accent but
-    /// has no World. Hiding the rest keeps the sheet honest about what the
-    /// current face actually responds to.
+    /// World + Accent. Bauhaus and Classic both take only their second-hand
+    /// colour from Accent, and neither has a World. Hiding the rest keeps the
+    /// sheet honest about what the current face actually responds to.
     private func updateGroupVisibility() {
         let face = defaults.face
         let usesPlate = (face == .bauhaus)
         let usesLight = (face == .eclipse || face == .strata || face == .filament)
         plateGroup?.isHidden = !usesPlate
         worldGroup?.isHidden = !usesLight
-        accentGroup?.isHidden = !(usesLight || face == .classic)
+        accentGroup?.isHidden = !(usesLight || face == .classic || face == .bauhaus)
+        accentCaption?.stringValue = usesLight
+            ? "Tints the light. Adaptive lets it drift with the hour."
+            : "The second hand. Adaptive matches the other two."
+        // The night plate only ever appears if there's a swap to make: a dark
+        // day plate stays put, and with "Follow the day" off nothing swaps.
+        let daylightPlateSwaps = usesPlate && defaults.nightDimming
+            && !BauhausFace.Palette.named(defaults.bauhausPalette).isDark
+        setRowHidden(nightPlateRow, !daylightPlateSwaps)
         // Bauhaus, Classic and Strata always draw their own numerals (or
         // none at all); only the aperture faces can toggle them on.
         setRowHidden(numeralsRow, !(face == .eclipse || face == .filament))
@@ -357,6 +430,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
 
     private func updatePlateSelection() {
         for b in plateButtons { b.isSelected = (b.palette.key == defaults.bauhausPalette) }
+    }
+    private func updateNightPlateSelection() {
+        for b in nightPlateButtons { b.isSelected = (b.palette.key == defaults.bauhausNightPalette) }
     }
     private func updateWorldSelection() {
         for b in worldButtons { b.isSelected = (b.world == defaults.world) }

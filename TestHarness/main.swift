@@ -15,7 +15,13 @@ let saverPath = args[1]
 let outPath = args[2]
 let showConfig = args.contains("--config")
 let isPreviewMode = args.contains("--preview")
-let positional = args.dropFirst(3).filter { $0 != "--config" && $0 != "--preview" }
+// Capture the CALayer tree instead of drawRect. The saver composites its
+// cached face and its live hands as two sublayers, and cacheDisplay(in:to:)
+// walks drawRect only — it never sees sublayer contents. The default capture
+// path exercises the view's offscreen fallback, which is correct but is NOT
+// the code that runs on screen; this flag is how the layer path gets checked.
+let captureLayers = args.contains("--layers")
+let positional = args.dropFirst(3).filter { !$0.hasPrefix("--") }
 let delay = positional.count > 0 ? Double(positional[0]) ?? 2.0 : 2.0
 let width = positional.count > 1 ? Int(positional[1]) ?? 1200 : 1200
 let height = positional.count > 2 ? Int(positional[2]) ?? 800 : 800
@@ -54,7 +60,15 @@ func captureAndExit(_ view: NSView, to path: String) {
         FileHandle.standardError.write("could not create bitmap rep\n".data(using: .utf8)!)
         exit(1)
     }
-    view.cacheDisplay(in: view.bounds, to: rep)
+    if captureLayers, let layer = view.layer {
+        guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else {
+            FileHandle.standardError.write("could not make a context for the bitmap rep\n".data(using: .utf8)!)
+            exit(1)
+        }
+        layer.render(in: ctx.cgContext)
+    } else {
+        view.cacheDisplay(in: view.bounds, to: rep)
+    }
     guard let data = rep.representation(using: .png, properties: [:]) else {
         FileHandle.standardError.write("could not encode png\n".data(using: .utf8)!)
         exit(1)
