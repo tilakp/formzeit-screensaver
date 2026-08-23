@@ -8,24 +8,38 @@ final class FormzeitDefaults {
     static let moduleName = "com.tilakpatel.formzeit"
 
     private let store: UserDefaults
+    /// Non-nil for throwaway thumbnail instances, which must never write.
+    private let transientSuite: String?
 
     init() {
         store = ScreenSaverDefaults(forModuleWithName: FormzeitDefaults.moduleName) ?? .standard
+        transientSuite = nil
         registerFactoryDefaults()
         migrateAccentIfNeeded()
     }
 
-    /// An ephemeral, throwaway defaults domain seeded with a specific
-    /// face/world/accent — never touches the real saved settings. Used only
-    /// so the settings sheet's face picker can render its thumbnails with
-    /// the exact same renderer real settings drive, at a fixed time,
-    /// regardless of what's currently saved.
-    init(transientFace face: FaceKind, world: ColorWorld, accent: Accent) {
-        store = UserDefaults(suiteName: "formzeit.transient.\(UUID().uuidString)") ?? .standard
+    /// An ephemeral defaults object seeded with a specific look — never
+    /// touches the real saved settings. Used so the settings sheet's face
+    /// picker can render its thumbnails through the same renderer real
+    /// settings drive, regardless of what's currently saved.
+    ///
+    /// The overrides go into the *registration* domain, not via `set`.
+    /// `UserDefaults(suiteName:)` is genuinely persistent — anything `set`
+    /// on it writes `~/Library/Preferences/<suite>.plist` and nothing ever
+    /// reaps it, so opening the settings sheet used to strand five plists
+    /// per open, forever. Registered values read back identically, later
+    /// registrations win over earlier ones, and none of it hits disk.
+    init(transientFace face: FaceKind, world: ColorWorld, accent: Accent,
+         palette: String = "lagoon") {
+        transientSuite = "formzeit.transient.\(UUID().uuidString)"
+        store = UserDefaults(suiteName: transientSuite) ?? .standard
         registerFactoryDefaults()
-        store.set(face.rawValue, forKey: Keys.face)
-        store.set(world.rawValue, forKey: Keys.world)
-        store.set(accent.rawValue, forKey: Keys.accent)
+        store.register(defaults: [
+            Keys.face: face.rawValue,
+            Keys.world: world.rawValue,
+            Keys.accent: accent.rawValue,
+            Keys.bauhausPalette: palette,
+        ])
     }
 
     private func registerFactoryDefaults() {
@@ -46,13 +60,19 @@ final class FormzeitDefaults {
     /// v1's `accentIndex` (0...5 into the old Braun-named swatch list) maps
     /// index-for-index onto the new `Accent` cases — same six colors,
     /// renamed/recolored. Only migrate if the user actually had a saved
-    /// choice (the key exists in the store, not just the registered
-    /// fallback) and hasn't already picked a v2 accent, so a fresh install
+    /// choice and hasn't already picked a v2 accent, so a fresh install
     /// keeps the new Adaptive default instead of landing on Lumen.
+    ///
+    /// Both checks go through `persistentDomain(forName:)`, NOT
+    /// `object(forKey:)`. `object(forKey:)` searches the registration domain
+    /// too, and `registerFactoryDefaults()` has just registered both keys —
+    /// so it always reports "present" and the migration silently never ran.
     private func migrateAccentIfNeeded() {
-        guard store.object(forKey: Keys.accent) == nil else { return }
-        guard store.object(forKey: Keys.accentIndex) != nil else { return }
-        let idx = clamp(store.integer(forKey: Keys.accentIndex), 0, AccentColor.all.count - 1)
+        let saved = store.persistentDomain(forName: FormzeitDefaults.moduleName)
+            ?? store.dictionaryRepresentation()
+        guard saved[Keys.accent] == nil else { return }
+        guard let legacy = saved[Keys.accentIndex] as? Int else { return }
+        let idx = clamp(legacy, 0, AccentColor.all.count - 1)
         store.set(Accent.migrated(fromLegacyIndex: idx).rawValue, forKey: Keys.accent)
         save()
     }
@@ -111,7 +131,7 @@ final class FormzeitDefaults {
     }
 
     var face: FaceKind {
-        get { FaceKind(rawValue: store.string(forKey: Keys.face) ?? "") ?? .eclipse }
+        get { FaceKind(rawValue: store.string(forKey: Keys.face) ?? "") ?? .bauhaus }
         set { store.set(newValue.rawValue, forKey: Keys.face); save() }
     }
 
@@ -134,6 +154,10 @@ final class FormzeitDefaults {
     }
 
     private func save() {
+        // Transient thumbnail instances are read-only by construction; a
+        // stray write here would both persist a throwaway plist and tell
+        // every live view that the user's settings changed.
+        guard transientSuite == nil else { return }
         if let ssd = store as? ScreenSaverDefaults {
             ssd.synchronize()
         }

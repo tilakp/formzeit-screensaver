@@ -34,11 +34,19 @@ public final class FormzeitView: ScreenSaverView {
     private var faceCacheScale: CGFloat = 0
     private var faceCacheGeneratedAtUptime: TimeInterval = -.infinity
     private var isRegeneratingFaceCache = false
+    /// Bumped by `invalidateFaceCache()`. A background render commits only
+    /// if the generation it started under is still current.
+    private var faceCacheGeneration = 0
+    /// Last drawn frame's visual fingerprint; nil forces the next redraw.
+    private var lastFrameFingerprint: Int?
     // Cheap now that regeneration doesn't block the main thread — mainly
     // bounds how long a settings change (24-hour toggle, accent color, night
     // dimming) takes to reach the face layer, since those only affect
     // renderFace(); hands react to settings instantly either way.
-    private let faceCacheRefreshInterval: TimeInterval = 1.5
+    /// Drift moves the plate ~0.05-0.07pt/s, so even at 6s the cached face
+    /// is under a device pixel out of step with the live hands. Settings
+    /// changes don't wait for this — they invalidate explicitly.
+    private let faceCacheRefreshInterval: TimeInterval = 6.0
 
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
@@ -56,13 +64,26 @@ public final class FormzeitView: ScreenSaverView {
 
         NotificationCenter.default.addObserver(self, selector: #selector(handleExternalCacheInvalidation),
                                                 name: .formzeitSettingsChanged, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleExternalCacheInvalidation),
-                                                name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
-                                                object: nil)
+        // Accessibility changes post to NSWorkspace's OWN notification
+        // centre, not the default one. Registered on the default centre this
+        // observer could never fire, so the live re-read it promises never
+        // happened and a cached pass could stay stale indefinitely.
+        FormzeitRenderer.refreshAccessibilityFlags()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(handleAccessibilityChange),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
+    @objc private func handleAccessibilityChange() {
+        // Refresh on the main thread; the background cache render reads the
+        // cached copies rather than touching NSWorkspace off-main.
+        FormzeitRenderer.refreshAccessibilityFlags()
+        invalidateFaceCache()
     }
 
     /// A settings change (face/world/accent/... from the configure sheet)
@@ -78,15 +99,35 @@ public final class FormzeitView: ScreenSaverView {
     /// settings change instead of waiting out the interval below.
     func invalidateFaceCache() {
         faceCacheGeneratedAtUptime = -.infinity
+        // Bump the generation so an in-flight background render — started
+        // under the OLD settings — can't stamp its stale bitmap as fresh and
+        // suppress the next regeneration for another full interval.
+        faceCacheGeneration &+= 1
+        lastFrameFingerprint = nil
         needsDisplay = true
     }
 
     public override func startAnimation() {
         super.startAnimation()
         runStartUptime = ProcessInfo.processInfo.systemUptime
+        lastFrameFingerprint = nil
     }
 
+    /// Only ask for a redraw when the frame would actually differ.
+    ///
+    /// At 30fps with the default Mechanical movement the second hand takes
+    /// 8 discrete positions a second, so ~22 of every 30 frames are
+    /// pixel-identical work — and a full redraw at 5K is not cheap. The
+    /// fingerprint quantises every moving element to half a point of tip
+    /// travel, so Sweep (which genuinely moves every frame) still redraws
+    /// every frame while stepped movements skip the repeats.
     public override func animateOneFrame() {
+        let fp = FormzeitRenderer.frameFingerprint(
+            now: Date(),
+            elapsedRunTime: ProcessInfo.processInfo.systemUptime - runStartUptime,
+            bounds: bounds, defaults: settings)
+        guard fp != lastFrameFingerprint else { return }
+        lastFrameFingerprint = fp
         needsDisplay = true
     }
 
@@ -126,6 +167,7 @@ public final class FormzeitView: ScreenSaverView {
         guard bounds.width > 0, bounds.height > 0 else { return }
 
         isRegeneratingFaceCache = true
+        let generation = faceCacheGeneration
         let boundsSnapshot = bounds
         let elapsedRunTime = nowUptime - runStartUptime
         let isPreviewSnapshot = isPreview
@@ -140,13 +182,21 @@ public final class FormzeitView: ScreenSaverView {
                                               defaults: defaultsSnapshot)
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                self.isRegeneratingFaceCache = false
+                // Settings changed while this was rendering: the bitmap is
+                // already stale. Drop it rather than stamping it as fresh,
+                // which would suppress the next regeneration for a whole
+                // interval and leave the change invisible until then.
+                guard generation == self.faceCacheGeneration else {
+                    self.needsDisplay = true
+                    return
+                }
                 if let image = image {
                     self.faceCache = image
                     self.faceCacheSize = boundsSnapshot.size
                     self.faceCacheScale = scale
                     self.faceCacheGeneratedAtUptime = nowUptime
                 }
-                self.isRegeneratingFaceCache = false
                 self.needsDisplay = true
             }
         }

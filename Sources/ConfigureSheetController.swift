@@ -21,6 +21,11 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private weak var worldGroup: NSView?
     private weak var accentGroup: NSView?
     private weak var numeralsRow: NSView?
+    /// Each row's preceding separator, so hiding a row hides its divider.
+    /// Without this, `isHidden` on a row inside a groupBox is layout-inert:
+    /// the hand-built constraint chain keeps its space and the NSBox above
+    /// it is still drawn, leaving a stray divider over a dead band.
+    private var rowSeparators: [ObjectIdentifier: NSBox] = [:]
 
     init(defaults: FormzeitDefaults) {
         self.defaults = defaults
@@ -326,7 +331,28 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         accentGroup?.isHidden = !(usesLight || face == .classic)
         // Bauhaus, Classic and Strata always draw their own numerals (or
         // none at all); only the aperture faces can toggle them on.
-        numeralsRow?.isHidden = !(face == .eclipse || face == .filament)
+        setRowHidden(numeralsRow, !(face == .eclipse || face == .filament))
+    }
+
+    /// Rows inside a groupBox are positioned by an explicit constraint chain
+    /// rather than a stack view, so `isHidden` alone leaves their space and
+    /// their separator behind. Collapse the height explicitly.
+    private func setRowHidden(_ row: NSView?, _ hidden: Bool) {
+        guard let row = row else { return }
+        row.isHidden = hidden
+        rowSeparators[ObjectIdentifier(row)]?.isHidden = hidden
+
+        let existing = row.constraints.first { $0.identifier == "collapse" }
+        if hidden {
+            if existing == nil {
+                let c = row.heightAnchor.constraint(equalToConstant: 0)
+                c.identifier = "collapse"
+                c.priority = .required
+                c.isActive = true
+            }
+        } else {
+            existing?.isActive = false
+        }
     }
 
     private func updatePlateSelection() {
@@ -377,6 +403,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
                 separator.boxType = .separator
                 separator.translatesAutoresizingMaskIntoConstraints = false
                 container.addSubview(separator)
+                rowSeparators[ObjectIdentifier(row)] = separator
                 constraints.append(separator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 13))
                 constraints.append(separator.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -13))
                 constraints.append(separator.topAnchor.constraint(equalTo: previous.bottomAnchor, constant: 9))

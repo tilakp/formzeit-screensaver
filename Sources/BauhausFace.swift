@@ -94,11 +94,17 @@ enum BauhausFace {
         let p = activePalette(now: now, isPreview: isPreview, defaults: defaults)
         let dim = dimFactor(elapsedRunTime: elapsedRunTime, isPreview: isPreview, defaults: defaults)
 
-        // Fill the whole frame, not just the disc — the plate reads as a
-        // surface the screen is cut out of, not a coin on a backdrop.
-        context.setFillColor(p.bg.blended(dim: dim).cgColor)
-        context.fill(bounds)
-        drawGrain(context: context, bounds: bounds, isDark: p.isDark)
+        // The plate fills the whole frame, not just a disc — it reads as a
+        // surface the screen is cut out of, not a coin on a backdrop. It and
+        // its grain are identical between regenerations, so they come from a
+        // cached bitmap; see plateImage.
+        if let plate = plateImage(context: context, bounds: bounds, palette: p, dim: dim) {
+            context.draw(plate, in: bounds)
+        } else {
+            context.setFillColor(p.bg.blended(dim: dim).cgColor)
+            context.fill(bounds)
+            drawGrain(context: context, bounds: bounds, isDark: p.isDark)
+        }
 
         context.saveGState()
         applyDrift(context: context, g: g)
@@ -127,11 +133,14 @@ enum BauhausFace {
         context.saveGState()
         applyDrift(context: context, g: g)
 
-        drawSecondHand(context: context, center: g.center, R: g.R, angle: secondAngle, palette: p, dim: dim)
+        // Hour, minute, second, hub — the order they're stacked on a real
+        // movement. The second hand was drawn first, which sank it beneath
+        // both batons and made it vanish and reappear as it swept past them.
         drawHand(context: context, center: g.center, R: g.R, angle: hourAngle,
                  length: g.R * hourLen, halfW: g.R * hourHalf, palette: p, dim: dim)
         drawHand(context: context, center: g.center, R: g.R, angle: minuteAngle,
                  length: g.R * minuteLen, halfW: g.R * minuteHalf, palette: p, dim: dim)
+        drawSecondHand(context: context, center: g.center, R: g.R, angle: secondAngle, palette: p, dim: dim)
         drawHub(context: context, center: g.center, R: g.R, palette: p, dim: dim)
 
         context.restoreGState()
@@ -210,6 +219,58 @@ enum BauhausFace {
         }
         return ctx.makeImage()
     }()
+
+    // MARK: - Cached plate
+    //
+    // The flat fill plus its two grain passes are the entire cost of the
+    // face pass — measured at ~570ms on a 5K frame, versus ~2ms for all the
+    // markers and numerals combined. And every regeneration produces the
+    // same pixels: the grain is a static texture drawn before `applyDrift`,
+    // and the only thing varying underneath is a dim ramp that moves
+    // 0.000075/s and is constant after minute 45. Regenerating it every
+    // 1.5s was ~40% of a core doing nothing, which is the same class of
+    // regression this project already fixed once.
+    //
+    // So it is composited once into a bitmap and reused. Built at *device*
+    // resolution with the grain tiled 1:1 and no interpolation, because a
+    // 512pt tile resampled into a 2x context was itself a large part of the
+    // cost even on the miss.
+
+    private struct PlateKey: Equatable {
+        let w: Int, h: Int, palette: String, dimBucket: Int
+    }
+    private static var plateCache: CGImage?
+    private static var plateKey: PlateKey?
+    private static let plateLock = NSLock()
+
+    private static func plateImage(context: CGContext, bounds: CGRect,
+                                    palette: Palette, dim: CGFloat) -> CGImage? {
+        let scale = max(1.0, abs(context.ctm.a))
+        let w = Int((bounds.width * scale).rounded())
+        let h = Int((bounds.height * scale).rounded())
+        guard w > 0, h > 0 else { return nil }
+        // Quantise dim so the idle ramp's continuous crawl doesn't bust the
+        // cache every frame; 1/64 steps are far below the visible threshold.
+        let key = PlateKey(w: w, h: h, palette: palette.key, dimBucket: Int((dim * 64).rounded()))
+
+        plateLock.lock()
+        defer { plateLock.unlock() }
+        if let cached = plateCache, plateKey == key { return cached }
+
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let px = CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h))
+        ctx.setFillColor(palette.bg.blended(dim: dim).cgColor)
+        ctx.fill(px)
+        ctx.interpolationQuality = .none
+        drawGrain(context: ctx, bounds: px, isDark: palette.isDark)
+
+        guard let image = ctx.makeImage() else { return nil }
+        plateCache = image
+        plateKey = key
+        return image
+    }
 
     private static func drawGrain(context: CGContext, bounds: CGRect, isDark: Bool) {
         guard let grain = grainImage else { return }
@@ -339,8 +400,12 @@ enum BauhausFace {
         // Shadow pass. The offset is set in the UNROTATED frame so it stays
         // down-right on screen whichever way the hand points.
         context.saveGState()
+        // Blur is the single most expensive thing in this pass — cost runs
+        // roughly linear in radius, and a shadowed fill is ~50x an unshadowed
+        // one. 1.15 keeps the contact shadow reading while costing about half
+        // what 2.3 did.
         context.setShadow(offset: CGSize(width: halfW * 0.30, height: -halfW * 0.55),
-                          blur: halfW * 2.3,
+                          blur: halfW * 1.15,
                           color: NSColor(calibratedRed: 0.09, green: 0.23, blue: 0.22, alpha: 0.34).cgColor)
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: theta)
@@ -382,7 +447,7 @@ enum BauhausFace {
         let chHalf = halfW - m
         let chA = bodyStart - halfW + m + chHalf * 0.9
         let chB = length - m - chHalf * 0.9
-        if chB > chA, chHalf > 0.4 {
+        if chB > chA, chHalf > halfW * 0.12 {
             let ch = CGPath(roundedRect: CGRect(x: -chHalf, y: chA, width: chHalf * 2, height: chB - chA),
                             cornerWidth: chHalf, cornerHeight: chHalf, transform: nil)
             let lume = palette.lume.blended(dim: dim)
@@ -406,9 +471,9 @@ enum BauhausFace {
 
     private static func drawSecondHand(context: CGContext, center: CGPoint, R: CGFloat, angle: CGFloat,
                                         palette: Palette, dim: CGFloat) {
+        // No shadow here on purpose: on a hairline this thin it is not
+        // visible, and it measured ~8x the cost of drawing the hand itself.
         context.saveGState()
-        context.setShadow(offset: CGSize(width: R * 0.003, height: -R * 0.004), blur: R * 0.010,
-                          color: NSColor(calibratedRed: 0.09, green: 0.23, blue: 0.22, alpha: 0.24).cgColor)
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: -angle)
         // White, like the other two hands — it is a raised part, not a mark
