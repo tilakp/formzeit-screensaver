@@ -16,6 +16,12 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private var accentButtons: [AccentSwatchButton] = []
     private var plateButtons: [PlateChipButton] = []
 
+    // Held so the colour groups can be shown/hidden per selected face.
+    private weak var plateGroup: NSView?
+    private weak var worldGroup: NSView?
+    private weak var accentGroup: NSView?
+    private weak var numeralsRow: NSView?
+
     init(defaults: FormzeitDefaults) {
         self.defaults = defaults
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 660),
@@ -48,6 +54,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         updateWorldSelection()
         updatePlateSelection()
         updateAccentSelection()
+        updateGroupVisibility()
     }
 
     // MARK: - Build
@@ -89,6 +96,14 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             switchRow("Follow the day", "Colour and brightness track the hour.",
                        initial: defaults.nightDimming, action: #selector(toggleFollowDay(_:))).row,
         ])
+
+        // Colour controls are per-face and don't overlap: Plate paints the
+        // Bauhaus dial, World/Accent light the aperture faces. Showing all
+        // of them at once leaves whichever face you picked surrounded by
+        // controls that visibly do nothing, so they're hidden instead.
+        self.plateGroup = plateGroup
+        self.worldGroup = worldGroup
+        self.accentGroup = accentGroup
 
         let stack = NSStackView(views: [faceGroup, plateGroup, worldGroup, accentGroup, movementGroup, protectionGroup])
         stack.orientation = .vertical
@@ -157,6 +172,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             doneButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
 
+        updateGroupVisibility()
         previewView.startAnimation()
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged),
                                                 name: .formzeitSettingsChanged, object: nil)
@@ -251,8 +267,10 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     }
 
     private func buildShowNumeralsRow() -> NSView {
-        switchRow("Show numerals", "Draw hour numerals over the marks, rather than marks alone.",
-                   initial: defaults.showNumerals, action: #selector(toggleShowNumerals(_:))).row
+        let row = switchRow("Show numerals", "Draw hour numerals over the marks, rather than marks alone.",
+                             initial: defaults.showNumerals, action: #selector(toggleShowNumerals(_:))).row
+        numeralsRow = row
+        return row
     }
 
     // MARK: - Actions
@@ -260,6 +278,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     @objc private func faceTapped(_ sender: FaceThumbnailButton) {
         defaults.face = sender.face
         updateFaceSelection()
+        updateGroupVisibility()
     }
 
     @objc private func plateTapped(_ sender: PlateChipButton) {
@@ -294,6 +313,22 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private func updateFaceSelection() {
         for b in faceButtons { b.isSelected = (b.face == defaults.face) }
     }
+    /// Bauhaus is painted from a Plate; Eclipse/Strata/Filament are lit by a
+    /// World + Accent. Classic takes its second-hand colour from Accent but
+    /// has no World. Hiding the rest keeps the sheet honest about what the
+    /// current face actually responds to.
+    private func updateGroupVisibility() {
+        let face = defaults.face
+        let usesPlate = (face == .bauhaus)
+        let usesLight = (face == .eclipse || face == .strata || face == .filament)
+        plateGroup?.isHidden = !usesPlate
+        worldGroup?.isHidden = !usesLight
+        accentGroup?.isHidden = !(usesLight || face == .classic)
+        // Bauhaus, Classic and Strata always draw their own numerals (or
+        // none at all); only the aperture faces can toggle them on.
+        numeralsRow?.isHidden = !(face == .eclipse || face == .filament)
+    }
+
     private func updatePlateSelection() {
         for b in plateButtons { b.isSelected = (b.palette.key == defaults.bauhausPalette) }
     }

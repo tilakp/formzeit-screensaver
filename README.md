@@ -32,8 +32,9 @@ Shared across the faces:
 
 - **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour.
 - **Three movements** — Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical (stepped sweep), Sweep (continuous).
-- 12/24-hour display, optional hour numerals (on the aperture faces, drawn rather than punched), from a native settings panel with a live preview (no Interface Builder).
-- **Burn-in aware** — on Eclipse/Strata/Filament, the light source itself orbits slowly rather than translating a static image; brightness also auto-dims after long idle periods, down to a floor (never fully dark, so it still reads as a clock). Classic keeps its original organic-drift approach.
+- 12/24-hour display and three movements, from a native settings panel with a live preview. The panel shows only the controls the selected face actually responds to — Plate for Bauhaus, World/Accent for the light-based faces — rather than leaving dead controls on screen.
+- **Burn-in aware** — on Eclipse/Strata/Filament the light source itself orbits rather than translating a static image; Bauhaus and Classic drift the whole composition slowly instead. All faces ease brightness down after a long idle stretch, to a floor rather than to black.
+- **Day and night** — "Follow the day" moves the light-based faces along a 24-hour colour curve. Bauhaus instead switches to its dark Slate plate overnight: multiplying a flat pastel toward black produces grey mud, not a darker mint, so it changes plate rather than dimming.
 
 ## Requirements
 
@@ -73,7 +74,7 @@ A build-from-source bundle never gets the quarantine flag in the first place (it
 
 ## Development
 
-- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face/world/accent other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `strata`/`filament`/`classic`) beforehand.
+- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `bauhaus`/`classic`/`strata`/`filament`) beforehand, and `defaults -currentHost delete com.tilakpatel.formzeit face` to put it back. Bauhaus plates are the `bauhausPalette` key (`lagoon`, `pistachio`, `cream`, `sky`, `salmon`, `yellow`, `beige`, `slate`).
 - `./audit.sh` — a numerical audit, not a visual one: it renders the Classic dial into a bitmap and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick clearance) rather than relying on eyeballing a screenshot, plus an informational Eclipse mean-frame-luminance sweep across the day/night color curve.
 
 ## How it's built
