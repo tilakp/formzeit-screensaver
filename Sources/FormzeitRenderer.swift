@@ -22,6 +22,9 @@ enum FormzeitRenderer {
     static func renderFace(context: CGContext, bounds: CGRect, now: Date, elapsedRunTime: TimeInterval, isPreview: Bool,
                             defaults: FormzeitDefaults) {
         switch defaults.face {
+        case .bauhaus:
+            BauhausFace.renderFace(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
+                                    isPreview: isPreview, defaults: defaults)
         case .classic:
             ClassicFace.renderFace(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
                                     isPreview: isPreview, defaults: defaults)
@@ -41,6 +44,10 @@ enum FormzeitRenderer {
         let reduceMotion = self.reduceMotion()
 
         switch defaults.face {
+        case .bauhaus:
+            BauhausFace.renderHands(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
+                                     isPreview: isPreview, defaults: defaults, reduceMotion: reduceMotion)
+
         case .classic:
             let lighting = DielLighting(now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview,
                                          reduceMotion: reduceMotion, defaults: defaults)

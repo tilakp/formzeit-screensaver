@@ -32,20 +32,23 @@ enum Movement: String, CaseIterable {
     }
 }
 
-/// Which face is drawn. Classic is the original BC12 dial, kept as a fourth
-/// option per product decision — cheap to keep, protects users who liked it.
+/// Which face is drawn. Classic (the original BC12 dial) is the default —
+/// Eclipse/Strata/Filament are opt-in alternatives, chosen from the Face
+/// picker in settings.
 enum FaceKind: String, CaseIterable {
-    case eclipse
+    case bauhaus
+    case classic
     case strata
     case filament
-    case classic
+    case eclipse
 
     var displayName: String {
         switch self {
-        case .eclipse: return "Eclipse"
+        case .bauhaus: return "Bauhaus"
+        case .classic: return "Classic"
         case .strata: return "Strata"
         case .filament: return "Filament"
-        case .classic: return "Classic"
+        case .eclipse: return "Eclipse"
         }
     }
 }

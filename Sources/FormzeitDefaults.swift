@@ -35,10 +35,11 @@ final class FormzeitDefaults {
             Keys.use24Hour: false,
             Keys.burnInProtection: true,
             Keys.nightDimming: true,
-            Keys.face: FaceKind.eclipse.rawValue,
+            Keys.face: FaceKind.bauhaus.rawValue,
             Keys.world: ColorWorld.ember.rawValue,
             Keys.accent: Accent.adaptive.rawValue,
             Keys.showNumerals: false,
+            Keys.bauhausPalette: "lagoon",
         ])
     }
 
@@ -66,6 +67,14 @@ final class FormzeitDefaults {
         static let world = "world"
         static let accent = "accent"
         static let showNumerals = "showNumerals"
+        static let bauhausPalette = "bauhausPalette"
+    }
+
+    /// Which flat-colour plate the Bauhaus face draws (Lagoon, Pistachio, …).
+    /// Separate from `world`, which drives the light-based faces only.
+    var bauhausPalette: String {
+        get { store.string(forKey: Keys.bauhausPalette) ?? "lagoon" }
+        set { store.set(newValue, forKey: Keys.bauhausPalette); save() }
     }
 
     var accentIndex: Int {

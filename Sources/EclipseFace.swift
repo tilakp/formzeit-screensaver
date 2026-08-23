@@ -33,8 +33,8 @@ enum EclipseFace {
                 ? [source.color.withAlphaComponent(0.35 * lighting.lum).cgColor,
                    source.color.withAlphaComponent(0.35 * lighting.lum).cgColor,
                    source.color.withAlphaComponent(0.0).cgColor] as CFArray
-                : [source.color.withAlphaComponent(0.55 * lighting.lum).cgColor,
-                   source.color.withAlphaComponent(0.13 * lighting.lum).cgColor,
+                : [source.color.withAlphaComponent(0.72 * lighting.lum).cgColor,
+                   source.color.withAlphaComponent(0.24 * lighting.lum).cgColor,
                    source.color.withAlphaComponent(0.0).cgColor] as CFArray
             let locations: [CGFloat] = increaseContrast ? [0.0, 0.6, 1.0] : [0.0, 0.34, 1.0]
             guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: stops,
@@ -59,12 +59,25 @@ enum EclipseFace {
     private static func lightSources(center: CGPoint, S: CGFloat, lighting: DielLighting) -> [Source] {
         let isDuplex = lighting.light2 != nil
         var sources = [Source(position: DielLighting.sourcePosition(center: center, S: S, theta: lighting.sourceAngle),
-                               color: lighting.light, weight: isDuplex ? 0.78 : 1.0)]
+                               color: vivid(lighting.light), weight: isDuplex ? 0.78 : 1.0)]
         if let light2 = lighting.light2, let theta2 = lighting.source2Angle {
             sources.append(Source(position: DielLighting.sourcePosition(center: center, S: S, theta: theta2),
-                                   color: light2, weight: 0.74))
+                                   color: vivid(light2), weight: 0.74))
         }
         return sources
+    }
+
+    /// Eclipse-only chroma boost: the spec's diel/world/accent colours are
+    /// tuned for a muted, "dark pixels are the material" read, but this
+    /// face wants a punchier, more saturated glow. Scoped here rather than
+    /// in `DielLighting` so Strata/Filament keep the original palette.
+    /// Boosting in Oklab (not sRGB) keeps hue stable at high chroma instead
+    /// of skewing toward whichever channel clips first.
+    private static func vivid(_ color: NSColor, chroma: Double = 1.65) -> NSColor {
+        var ok = toOklab(color)
+        ok.a *= chroma
+        ok.b *= chroma
+        return fromOklab(ok)
     }
 
     // MARK: - Per-frame pass: plate + apertures + bevel + corona (§4.5 steps 4-15)
@@ -86,6 +99,11 @@ enum EclipseFace {
                                           reduceMotion: lighting.reduceMotion)
 
         let sources = lightSources(center: center, S: S, lighting: lighting)
+        // The plate is not the ground — it's a little brighter and more
+        // colourful than a straight `lighting.plate` blend so it still
+        // reads as an object catching the (now much more vivid) light,
+        // not a flat cutout silhouette.
+        let vividPlate = fromOklab(mix(toOklab(vivid(lighting.field, chroma: 1.35)), toOklab(sources[0].color), 0.14))
         let primaryU = unitVector(from: center, to: sources[0].position)
         // Through-cut cores sit off-centre from the light, the way a deep
         // slot's floor looks displaced from its mouth when viewed at an
@@ -172,7 +190,7 @@ enum EclipseFace {
         context.beginTransparencyLayer(auxiliaryInfo: nil)
 
         context.setBlendMode(.normal)
-        context.setFillColor(lighting.plate.cgColor)
+        context.setFillColor(vividPlate.cgColor)
         context.fillEllipse(in: circleRect(center, R))
 
         // destinationOut at partial alpha punches a partial cut — the cut
@@ -199,7 +217,7 @@ enum EclipseFace {
         // Reseal the tip-ring centre — a ring threaded on the needle, not a
         // solid disc.
         context.setBlendMode(.normal)
-        context.setFillColor(lighting.plate.cgColor)
+        context.setFillColor(vividPlate.cgColor)
         context.fillEllipse(in: circleRect(tipRingCenter, 0.0185 * R))
 
         // Hub: score halo ring, then a small through collar re-sealed at
@@ -208,13 +226,13 @@ enum EclipseFace {
         context.setFillColor(CGColor(gray: 0, alpha: 0.12))
         context.fillEllipse(in: circleRect(center, 0.078 * R))
         context.setBlendMode(.normal)
-        context.setFillColor(lighting.plate.cgColor)
+        context.setFillColor(vividPlate.cgColor)
         context.fillEllipse(in: circleRect(center, 0.056 * R))
         context.setBlendMode(.destinationOut)
         context.setFillColor(CGColor(gray: 0, alpha: 1.0))
         context.fillEllipse(in: circleRect(center, 0.034 * R))
         context.setBlendMode(.normal)
-        context.setFillColor(lighting.plate.cgColor)
+        context.setFillColor(vividPlate.cgColor)
         context.fillEllipse(in: circleRect(center, 0.020 * R))
 
         context.endTransparencyLayer()
@@ -261,7 +279,7 @@ enum EclipseFace {
             let su = unitVector(from: center, to: source.position)
             context.saveGState()
             context.translateBy(x: su.dx * bevel, y: su.dy * bevel)
-            context.setStrokeColor(source.color.withAlphaComponent(0.62 * L * source.weight).cgColor)
+            context.setStrokeColor(source.color.withAlphaComponent(0.78 * L * source.weight).cgColor)
             context.addPath(allApertures)
             context.strokePath()
             context.restoreGState()
@@ -293,7 +311,7 @@ enum EclipseFace {
                 var angularDistance = abs(mid - sourceAngle).truncatingRemainder(dividingBy: 2 * .pi)
                 if angularDistance > .pi { angularDistance = 2 * .pi - angularDistance }
                 let prox = 1 - angularDistance / .pi
-                let alpha = (0.10 + 0.48 * prox) * L * source.weight
+                let alpha = (0.16 + 0.60 * prox) * L * source.weight
                 context.setStrokeColor(source.color.withAlphaComponent(alpha).cgColor)
                 context.addArc(center: center, radius: R, startAngle: .pi / 2 - a0, endAngle: .pi / 2 - a1, clockwise: true)
                 context.strokePath()
@@ -301,7 +319,7 @@ enum EclipseFace {
         }
 
         context.setLineWidth(0.0011 * S)
-        context.setStrokeColor(sources[0].color.withAlphaComponent(0.30 * L).cgColor)
+        context.setStrokeColor(sources[0].color.withAlphaComponent(0.42 * L).cgColor)
         context.addArc(center: center, radius: 0.056 * R, startAngle: 0, endAngle: 2 * .pi, clockwise: true)
         context.strokePath()
         context.restoreGState()

@@ -1,14 +1,16 @@
 # Formzeit
 
-A quiet macOS screensaver — a native `.saver` bundle written in Swift, built entirely from the command line with no Xcode project. Four faces, a shared day/night color system, and no Interface Builder anywhere in the settings panel.
+A quiet macOS screensaver — a native `.saver` bundle written in Swift, built entirely from the command line with no Xcode project. Five faces, a shared day/night color system, and no Interface Builder anywhere in the settings panel.
 
-![Eclipse](docs/eclipse.png)
+![Bauhaus](docs/bauhaus.png)
 
-Eclipse (the default face): a matte plate occludes a field of light, and hands and hour marks are cuts through that plate rather than painted shapes — their brightness comes from where the light sits behind them.
+Bauhaus (the default face): a flat-colour plate with numerals and markers pressed *into* the surface, raised white hands carrying a recessed lume channel, and a layered centre hub — on a finely grained plaster ground. Eight plates, from Lagoon through Slate.
 
-| Strata | Filament | Classic |
-|---|---|---|
-| ![Strata](docs/strata.png) | ![Filament](docs/filament.png) | ![Classic](docs/classic.png) |
+Four alternative faces, chosen from the settings panel:
+
+| Classic | Eclipse | Strata | Filament |
+|---|---|---|---|
+| ![Classic](docs/classic.png) | ![Eclipse](docs/eclipse.png) | ![Strata](docs/strata.png) | ![Filament](docs/filament.png) |
 
 Eclipse across the day — the same face, same moment on the clock, two hours apart from each other in the diel color curve:
 
@@ -18,14 +20,15 @@ Eclipse across the day — the same face, same moment on the clock, two hours ap
 
 ## Features
 
-Four faces, chosen from the settings panel:
+Five faces, chosen from the settings panel:
 
-- **Eclipse** (default) — a matte plate occludes a field of light; hands and hour marks are cuts through the plate at one of four depths, so their brightness comes from where the orbiting light source sits behind them, not from any animated highlight.
+- **Bauhaus** (default) — a flat-colour plate; every mark is debossed (a pale rim on the lower-right where the recess catches the light) while hands and hub are raised and cast onto it. Eight plates: Lagoon, Pistachio, Cream, Sky, Salmon, Yellow, Beige, Slate.
+- **Classic** — the original Braun BC12-inspired dial (single-ring numerals/ticks, three movements, machined-metal hand shading).
+- **Eclipse** — a matte plate occludes a field of light; hands and hour marks are cuts through the plate at one of four depths, so their brightness comes from where the orbiting light source sits behind them, not from any animated highlight.
 - **Strata** — three concentric hairline gauge arcs (seconds/minutes/hours), each a tail-ramp running from nearly invisible to full light at its head, with a large ultralight monospaced time readout at center.
 - **Filament** — sixty radial filaments, one per second; the current second ignites to full brightness and decays over ~6s into a short comet that circles once a minute, with steady minute/hour filaments reaching further inward.
-- **Classic** — the original Braun BC12-inspired dial (single-ring numerals/ticks, three movements, machined-metal hand shading), kept for anyone who prefers it.
 
-Shared across all four:
+Shared across the faces:
 
 - **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour.
 - **Three movements** — Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical (stepped sweep), Sweep (continuous).

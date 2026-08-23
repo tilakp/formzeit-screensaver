@@ -14,6 +14,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private var faceButtons: [FaceThumbnailButton] = []
     private var worldButtons: [WorldChipButton] = []
     private var accentButtons: [AccentSwatchButton] = []
+    private var plateButtons: [PlateChipButton] = []
 
     init(defaults: FormzeitDefaults) {
         self.defaults = defaults
@@ -45,6 +46,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         previewView.invalidateFaceCache()
         updateFaceSelection()
         updateWorldSelection()
+        updatePlateSelection()
         updateAccentSelection()
     }
 
@@ -77,6 +79,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         content.translatesAutoresizingMaskIntoConstraints = false
 
         let faceGroup = groupBox("Face", rows: [buildFaceRow()])
+        let plateGroup = groupBox("Plate", rows: [buildPlateRow()])
         let worldGroup = groupBox("World", rows: [buildWorldRow()])
         let accentGroup = groupBox("Accent", rows: [buildAccentRow()])
         let movementGroup = groupBox("Movement", rows: [buildMovementRow(), buildUse24HourRow(), buildShowNumeralsRow()])
@@ -87,7 +90,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
                        initial: defaults.nightDimming, action: #selector(toggleFollowDay(_:))).row,
         ])
 
-        let stack = NSStackView(views: [faceGroup, worldGroup, accentGroup, movementGroup, protectionGroup])
+        let stack = NSStackView(views: [faceGroup, plateGroup, worldGroup, accentGroup, movementGroup, protectionGroup])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -138,6 +141,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
             faceGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            plateGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             worldGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             accentGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             movementGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -192,6 +196,24 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         return row
     }
 
+    /// The Bauhaus face's flat plate colours. Kept separate from World,
+    /// which only drives the light-based faces.
+    private func buildPlateRow() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 6
+        row.distribution = .fillEqually
+        for palette in BauhausFace.Palette.all {
+            let button = PlateChipButton(palette: palette)
+            button.target = self
+            button.action = #selector(plateTapped(_:))
+            plateButtons.append(button)
+            row.addArrangedSubview(button)
+        }
+        updatePlateSelection()
+        return row
+    }
+
     private func buildAccentRow() -> NSView {
         let row = NSStackView()
         row.orientation = .horizontal
@@ -240,6 +262,11 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         updateFaceSelection()
     }
 
+    @objc private func plateTapped(_ sender: PlateChipButton) {
+        defaults.bauhausPalette = sender.palette.key
+        updatePlateSelection()
+    }
+
     @objc private func worldTapped(_ sender: WorldChipButton) {
         defaults.world = sender.world
         updateWorldSelection()
@@ -266,6 +293,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
 
     private func updateFaceSelection() {
         for b in faceButtons { b.isSelected = (b.face == defaults.face) }
+    }
+    private func updatePlateSelection() {
+        for b in plateButtons { b.isSelected = (b.palette.key == defaults.bauhausPalette) }
     }
     private func updateWorldSelection() {
         for b in worldButtons { b.isSelected = (b.world == defaults.world) }
@@ -581,5 +611,54 @@ final class AccentSwatchButton: RoundIconButton {
             ring.lineWidth = 1.5
             ring.stroke()
         }
+    }
+}
+
+
+/// A flat swatch of a Bauhaus plate colour, with its dark ink shown as a
+/// small bar so the pairing is visible before you pick it.
+final class PlateChipButton: RoundIconButton {
+    let palette: BauhausFace.Palette
+    var isSelected = false { didSet { needsDisplay = true } }
+
+    init(palette: BauhausFace.Palette) {
+        self.palette = palette
+        super.init(frame: NSRect(x: 0, y: 0, width: 62, height: 46))
+        translatesAutoresizingMaskIntoConstraints = false
+        setPreferredSize(NSSize(width: 62, height: 46))
+        isBordered = false
+        title = ""
+        wantsLayer = true
+        toolTip = palette.name
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let chip = NSRect(x: bounds.midX - 13, y: bounds.height - 26, width: 26, height: 20)
+        let path = NSBezierPath(roundedRect: chip, xRadius: 4, yRadius: 4)
+        palette.bg.setFill()
+        path.fill()
+        NSColor.black.withAlphaComponent(0.10).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+
+        // the plate's ink, as a short bar
+        palette.mark.setFill()
+        NSBezierPath(roundedRect: NSRect(x: chip.midX - 6, y: chip.minY + 5, width: 12, height: 3),
+                     xRadius: 1.5, yRadius: 1.5).fill()
+
+        if isSelected {
+            let ring = NSBezierPath(roundedRect: chip.insetBy(dx: -3.5, dy: -3.5), xRadius: 7, yRadius: 7)
+            NSColor.labelColor.withAlphaComponent(0.8).setStroke()
+            ring.lineWidth = 1.5
+            ring.stroke()
+        }
+
+        let label = NSString(string: palette.name)
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9),
+                                                      .foregroundColor: NSColor.secondaryLabelColor]
+        let size = label.size(withAttributes: attrs)
+        label.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 0), withAttributes: attrs)
     }
 }
