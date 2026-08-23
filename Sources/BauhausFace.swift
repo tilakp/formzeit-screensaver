@@ -167,7 +167,8 @@ enum BauhausFace {
                  length: g.R * minuteLen, halfW: g.R * minuteHalf, palette: p, dim: dim)
         drawSecondHand(context: context, center: g.center, R: g.R, angle: secondAngle, palette: p, dim: dim,
                        color: secondHandColor(palette: p, defaults: defaults))
-        drawHub(context: context, center: g.center, R: g.R, palette: p, dim: dim)
+        drawHub(context: context, center: g.center, R: g.R, palette: p, dim: dim,
+                tint: accentTint(defaults: defaults))
 
         context.restoreGState()
     }
@@ -540,8 +541,14 @@ enum BauhausFace {
     /// Adaptive keeps the hand the same white as the other two — a raised
     /// part, not a mark cut into the plate; drawn in `mark` it would read as a
     /// scratch across the dial. Any other accent paints the hairline that hue.
+    /// nil for Adaptive — there is no fixed hue, so the two accented parts
+    /// (the second hand and the hub's centre dome) keep the hands' colour.
+    static func accentTint(defaults: FormzeitDefaults) -> NSColor? {
+        defaults.accentV2.hex.map { NSColor(hex: $0) }
+    }
+
     static func secondHandColor(palette: Palette, defaults: FormzeitDefaults) -> NSColor {
-        if let hex = defaults.accentV2.hex { return NSColor(hex: hex) }
+        if let tint = accentTint(defaults: defaults) { return tint }
         guard palette.isLume else { return palette.hand }
         // A lume plate's `hand` is a deliberately muted steel so the baton
         // bodies don't outshine the lume they carry. On a hairline that thin
@@ -569,11 +576,16 @@ enum BauhausFace {
     // MARK: - Hub
 
     /// Four stacked layers: collar, boss stepped up off it, dark bearing
-    /// annulus, pale centre dome. The step's edge between collar and boss is
-    /// what sells the depth — one disc with a dot in it reads flat however
+    /// annulus, centre dome. The step's edge between collar and boss is what
+    /// sells the depth — one disc with a dot in it reads flat however
     /// carefully it is shaded.
+    ///
+    /// `tint` colours only the centre dome, so it matches the second hand
+    /// seated on it. The dark bearing annulus around it stays dark on
+    /// purpose: it's the frame that keeps a saturated dot from smearing into
+    /// the pale boss underneath.
     private static func drawHub(context: CGContext, center: CGPoint, R: CGFloat,
-                                 palette: Palette, dim: CGFloat) {
+                                 palette: Palette, dim: CGFloat, tint: NSColor?) {
         let r = R * hubR
         let base = palette.hand.blended(dim: dim)
 
@@ -622,10 +634,24 @@ enum BauhausFace {
         let ringHi = palette.isDark ? NSColor(hex: "#39434c") : NSColor(hex: "#97a5a5")
         domeFill(ao, ringHi.blended(dim: dim), ringLo.blended(dim: dim))
 
-        // 4. Pale centre dome seated in the ring.
+        // 4. Centre dome seated in the ring.
         let ai = r * 0.30
-        domeFill(ai, base.blended(withFraction: 0.34, of: NSColor(hex: "#9fb0b0")) ?? base,
-                 base.blended(withFraction: 0.70, of: .white) ?? base)
+        if let tint = tint?.blended(dim: dim) {
+            // Shade a saturated dome toward black/white rather than through
+            // the cool grey the pale version uses — that grey is what gives
+            // white its metal read, but it desaturates a hue to putty.
+            //
+            // On a lume plate the shaded half is pulled up hard: a dot this
+            // small, shaded 30% toward black, loses its lower edge into a
+            // near-black plate and stops reading as a dome at all.
+            let lo: CGFloat = palette.isLume ? 0.12 : 0.30
+            let hi: CGFloat = palette.isLume ? 0.52 : 0.42
+            domeFill(ai, tint.blended(withFraction: lo, of: .black) ?? tint,
+                     tint.blended(withFraction: hi, of: .white) ?? tint)
+        } else {
+            domeFill(ai, base.blended(withFraction: 0.34, of: NSColor(hex: "#9fb0b0")) ?? base,
+                     base.blended(withFraction: 0.70, of: .white) ?? base)
+        }
     }
 
     // MARK: - Small helpers
