@@ -1,10 +1,18 @@
 # Formzeit
 
-A quiet macOS screensaver — a native `.saver` bundle written in Swift, built entirely from the command line with no Xcode project. Five faces, a shared day/night color system, and no Interface Builder anywhere in the settings panel.
+A quiet macOS screensaver: a native `.saver` bundle written in Swift, built entirely from the
+command line with no Xcode project. Five faces, a shared day/night color system, and no
+Interface Builder anywhere in the settings panel.
 
 ![Bauhaus](docs/bauhaus.png)
 
-**Bauhaus — the default face.** A flat-colour plate where the numerals and the sixty markers are pressed *into* the surface, while the hands and centre hub sit raised above it and cast onto it. Both cues come from one fixed light: a recess catches a pale rim on its lower-right inner wall, a raised part throws its shadow the other way. The hands are white batons with a recessed lume channel; the hub is four stacked layers. Underneath it all is a fine plaster grain, at a strength you can actually see — that texture is what keeps a flat fill from reading as a computer-drawn circle.
+**Bauhaus, the default face.** A flat-colour plate where the numerals and the sixty markers are
+pressed *into* the surface, while the hands and centre hub sit raised above it and cast onto it.
+Both cues come from one fixed light: a recess catches a pale rim on its lower-right inner wall,
+a raised part throws its shadow the other way. The hands are white batons with a recessed lume
+channel; the hub is four stacked layers. Underneath it all is a fine plaster grain, at a
+strength you can actually see. That texture is what keeps a flat fill from reading as a
+computer-drawn circle.
 
 Eight plates:
 
@@ -13,11 +21,17 @@ Eight plates:
 | ![Lagoon](docs/plates/lagoon.png)<br>**Lagoon** | ![Pistachio](docs/plates/pistachio.png)<br>**Pistachio** | ![Cream](docs/plates/cream.png)<br>**Cream** | ![Sky](docs/plates/sky.png)<br>**Sky** |
 | ![Salmon](docs/plates/salmon.png)<br>**Salmon** | ![Yellow](docs/plates/yellow.png)<br>**Yellow** | ![Beige](docs/plates/beige.png)<br>**Beige** | ![Slate](docs/plates/slate.png)<br>**Slate** |
 
-With "Follow the day" on, the dial switches to a night plate between 22:00 and 07:00 — plain Slate, or one of five lume plates, where the depth model inverts. By day a mark is a recess catching an external light. On a lume plate the marks *are* the light: they glow, the hands' channel glows with them, and the baton bodies drop to a muted steel so they don't outshine the lume they carry.
+With "Follow the day" on, the dial switches to a night plate between 22:00 and 07:00: plain
+Slate, or one of five lume plates, where the depth model inverts. By day a mark is a recess
+catching an external light. On a lume plate the marks *are* the light: they glow, the hands'
+channel glows with them, and the baton bodies drop to a muted steel so they don't outshine the
+lume they carry.
 
 ![Night plates](docs/night-plates.png)
 
-The second hand and the hub's boss ring take their colour from **Accent**. Adaptive leaves them matching the other two hands; the six fixed hues tint both, with the dark bearing ring and pale centre dome kept inside the colour and the white collar framing it outside.
+The second hand and the hub's boss ring take their colour from **Accent**. Adaptive leaves them
+matching the other two hands; the six fixed hues tint both, with the dark bearing ring and pale
+centre dome kept inside the colour and the white collar framing it outside.
 
 Four alternative faces, chosen from the settings panel:
 
@@ -25,7 +39,8 @@ Four alternative faces, chosen from the settings panel:
 |---|---|---|---|
 | ![Classic](docs/classic.png) | ![Eclipse](docs/eclipse.png) | ![Strata](docs/strata.png) | ![Filament](docs/filament.png) |
 
-Eclipse across the day — the same face, same moment on the clock, two hours apart from each other in the diel color curve:
+Eclipse across the day: the same face, same moment on the clock, two hours apart from each
+other in the diel color curve:
 
 | 08:00 | 22:00 |
 |---|---|
@@ -35,35 +50,70 @@ Eclipse across the day — the same face, same moment on the clock, two hours ap
 
 Five faces, chosen from the settings panel:
 
-- **Bauhaus** (default) — a flat-colour plate; every mark is debossed (a pale rim on the lower-right where the recess catches the light) while hands and hub are raised and cast onto it. Eight day plates: Lagoon, Pistachio, Cream, Sky, Salmon, Yellow, Beige, Slate. Six night plates: Slate plus Green, Blue, Amber, Red and Lavender lume.
-- **Classic** — the original Braun BC12-inspired dial (single-ring numerals/ticks, three movements, machined-metal hand shading).
-- **Eclipse** — a matte plate occludes a field of light; hands and hour marks are cuts through the plate at one of four depths, so their brightness comes from where the orbiting light source sits behind them, not from any animated highlight.
-- **Strata** — three concentric hairline gauge arcs (seconds/minutes/hours), each a tail-ramp running from nearly invisible to full light at its head, with a large ultralight monospaced time readout at center.
-- **Filament** — sixty radial filaments, one per second; the current second ignites to full brightness and decays over ~6s into a short comet that circles once a minute, with steady minute/hour filaments reaching further inward.
+- **Bauhaus** (default): a flat-colour plate; every mark is debossed (a pale rim on the
+  lower-right where the recess catches the light) while hands and hub are raised and cast onto
+  it. Eight day plates: Lagoon, Pistachio, Cream, Sky, Salmon, Yellow, Beige, Slate. Six night
+  plates: Slate plus Green, Blue, Amber, Red and Lavender lume.
+- **Classic**: the original Braun BC12-inspired dial (single-ring numerals/ticks, three
+  movements, machined-metal hand shading).
+- **Eclipse**: a matte plate occludes a field of light; hands and hour marks are cuts through
+  the plate at one of four depths, so their brightness comes from where the orbiting light
+  source sits behind them, not from any animated highlight.
+- **Strata**: three concentric hairline gauge arcs (seconds/minutes/hours), each a tail-ramp
+  running from nearly invisible to full light at its head, with a large ultralight monospaced
+  time readout at center.
+- **Filament**: sixty radial filaments, one per second; the current second ignites to full
+  brightness and decays over ~6s into a short comet that circles once a minute, with steady
+  minute/hour filaments reaching further inward.
 
 Shared across the faces:
 
-- **A day/night color system** — a 24-hour color-and-luminance curve (the "diel curve") interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex) re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further — Adaptive has no fixed hue of its own and just takes the color of the hour. On Bauhaus and Classic the accent is narrower: it colours the second hand only.
-- **Three movements** — Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical (stepped sweep), Sweep (continuous).
-- 12/24-hour display and three movements, from a native settings panel with a live preview. The panel shows only the controls the selected face actually responds to — Plate for Bauhaus, World for the light-based faces — rather than leaving dead controls on screen. The night-plate row appears only when there is a swap to make: not with "Follow the day" off, and not when the day plate is already dark.
-- **Burn-in aware** — on Eclipse/Strata/Filament the light source itself orbits rather than translating a static image; Bauhaus and Classic drift the whole composition slowly instead. All faces ease brightness down after a long idle stretch, to a floor rather than to black.
-- **Day and night** — "Follow the day" moves the light-based faces along a 24-hour colour curve. Bauhaus instead switches to a dark night plate overnight: multiplying a flat pastel toward black produces grey mud, not a darker mint, so it changes plate rather than dimming.
+- **A day/night color system**: a 24-hour color-and-luminance curve (the "diel curve")
+  interpolated in Oklab so the golden-hour-to-night transition stays chromatic instead of
+  graying out at the midpoint. Six **worlds** (Ember, Lunar, Sodium, Radium, Quartz, Duplex)
+  re-anchor the hue family; seven **accents** (Adaptive plus six fixed hues) tint it further.
+  Adaptive has no fixed hue of its own and just takes the color of the hour. On Bauhaus and
+  Classic the accent is narrower: it colours the second hand only.
+- **Three movements**: Quartz (1 Hz tick with a damped-spring overshoot-and-settle), Mechanical
+  (stepped sweep), Sweep (continuous).
+- 12/24-hour display and three movements, from a native settings panel with a live preview. The
+  panel shows only the controls the selected face actually responds to, Plate for Bauhaus,
+  World for the light-based faces, rather than leaving dead controls on screen. The night-plate
+  row appears only when there is a swap to make: not with "Follow the day" off, and not when the
+  day plate is already dark.
+- **Burn-in aware**: on Eclipse/Strata/Filament the light source itself orbits rather than
+  translating a static image; Bauhaus and Classic drift the whole composition slowly instead.
+  All faces ease brightness down after a long idle stretch, to a floor rather than to black.
+- **Day and night**: "Follow the day" moves the light-based faces along a 24-hour colour curve.
+  Bauhaus instead switches to a dark night plate overnight: multiplying a flat pastel toward
+  black produces grey mud, not a darker mint, so it changes plate rather than dimming.
 
 ## Requirements
 
 - macOS 12 (Monterey) or later
 
-There are two ways to get Formzeit running. Building from source has no extra steps; downloading the prebuilt release has one required extra step, explained below.
+There are two ways to get Formzeit running. Building from source has no extra steps;
+downloading the prebuilt release has one required extra step, explained below.
 
 ## Option A: Download a prebuilt release (one extra step)
 
-Grab the `.zip` from [the latest release](https://github.com/tilakp/formzeit-screensaver/releases/latest), unzip it, and drag `Formzeit.saver` into `~/Library/Screen Savers/` (create the folder if it doesn't exist).
+Grab the `.zip` from [the latest
+release](https://github.com/tilakp/formzeit-screensaver/releases/latest), unzip it, and drag
+`Formzeit.saver` into `~/Library/Screen Savers/` (create the folder if it doesn't exist).
 
-**This is not a notarized build**, so macOS will not let it load as downloaded. This isn't a hypothetical warning — it's what actually happens, verified by simulating a real browser download end to end:
+**This is not a notarized build**, so macOS will not let it load as downloaded. This isn't a
+hypothetical warning. It's what actually happens, verified by simulating a real browser download
+end to end:
 
-- `spctl` assesses the bundle as `rejected` (expected — it's ad-hoc signed only, no Apple Developer ID). This stays true even after the fix below; it isn't the thing that's actually blocking you.
-- What *does* block it is the quarantine flag macOS attaches to anything downloaded from a browser. With that flag present, the bundle fails to load at all — selecting it in System Settings just won't show a working preview, with no error dialog explaining why.
-- **The fix** is to clear that flag, which is the specific thing that's blocking it (confirmed: the bundle loads successfully immediately after this, even though `spctl` alone still reports "rejected"):
+- `spctl` assesses the bundle as `rejected` (expected: it's ad-hoc signed only, no Apple
+  Developer ID). This stays true even after the fix below; it isn't the thing that's actually
+  blocking you.
+- What *does* block it is the quarantine flag macOS attaches to anything downloaded from a
+  browser. With that flag present, the bundle fails to load at all. Selecting it in System
+  Settings just won't show a working preview, with no error dialog explaining why.
+- **The fix** is to clear that flag, which is the specific thing that's blocking it (confirmed:
+  the bundle loads successfully immediately after this, even though `spctl` alone still reports
+  "rejected"):
 
   ```sh
   xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/Formzeit.saver
@@ -79,28 +129,54 @@ cd formzeit-screensaver
 ./build.sh -i
 ```
 
-This compiles the bundle from source, ad-hoc code-signs it, installs it to `~/Library/Screen Savers/Formzeit.saver`, and restarts the system's screensaver host processes so the new build actually gets picked up (macOS otherwise keeps a stale copy loaded in memory). Then open **System Settings → Screen Saver** and select **Formzeit**.
+This compiles the bundle from source, ad-hoc code-signs it, installs it to `~/Library/Screen
+Savers/Formzeit.saver`, and restarts the system's screensaver host processes so the new build
+actually gets picked up (macOS otherwise keeps a stale copy loaded in memory). Then open
+**System Settings → Screen Saver** and select **Formzeit**.
 
-A build-from-source bundle never gets the quarantine flag in the first place (it was never downloaded), so it just works with no Gatekeeper step. This requires Xcode Command Line Tools — `xcode-select --install` if you don't already have `swiftc`/`clang`. A full Xcode install is not required.
+A build-from-source bundle never gets the quarantine flag in the first place (it was never
+downloaded), so it just works with no Gatekeeper step. This requires Xcode Command Line Tools,
+`xcode-select --install` if you don't already have `swiftc`/`clang`. A full Xcode install is not
+required.
 
-> Both options produce the same ad-hoc-signed bundle. Neither is notarized, because that requires a paid Apple Developer Program membership ($99/year). The only difference between the two options is whether the file passed through a browser download and picked up a quarantine flag along the way.
+> Both options produce the same ad-hoc-signed bundle. Neither is notarized, because that
+> requires a paid Apple Developer Program membership ($99/year). The only difference between the
+> two options is whether the file passed through a browser download and picked up a quarantine
+> flag along the way.
 
 ## Development
 
-- `./preview.sh [seconds] [width] [height] [--preview|--config]` — renders the current build straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for iterating on the visual design. `--config` screenshots the settings sheet instead of the clock face. To preview a face other than whatever's currently saved: `defaults -currentHost write com.tilakpatel.formzeit face -string "eclipse"` (or `bauhaus`/`classic`/`strata`/`filament`) beforehand, and `defaults -currentHost delete com.tilakpatel.formzeit face` to put it back. Bauhaus plates are the `bauhausPalette` key (`lagoon`, `pistachio`, `cream`, `sky`, `salmon`, `yellow`, `beige`, `slate`) and `bauhausNightPalette` (`slate`, `lumeGreen`, `lumeBlue`, `lumeAmber`, `lumeRed`, `lumeLavender`). Add `--layers` to capture the CALayer tree rather than `drawRect` — the saver composites its cached face and its live hands as two layers, and the default capture path exercises an offscreen fallback instead of the code that actually runs on screen.
-- `./audit.sh` — a numerical audit, not a visual one: it renders the Classic dial into a bitmap and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick clearance) rather than relying on eyeballing a screenshot, plus an informational Eclipse mean-frame-luminance sweep across the day/night color curve.
+- `./preview.sh [seconds] [width] [height] [--preview|--config]`: renders the current build
+  straight to a PNG in `screenshots/`, without going through System Settings. The fast loop for
+  iterating on the visual design. `--config` screenshots the settings sheet instead of the clock
+  face. To preview a face other than whatever's currently saved: `defaults -currentHost write
+  com.tilakpatel.formzeit face -string "eclipse"` (or `bauhaus`/`classic`/`strata`/`filament`)
+  beforehand, and `defaults -currentHost delete com.tilakpatel.formzeit face` to put it back.
+  Bauhaus plates are the `bauhausPalette` key (`lagoon`, `pistachio`, `cream`, `sky`, `salmon`,
+  `yellow`, `beige`, `slate`) and `bauhausNightPalette` (`slate`, `lumeGreen`, `lumeBlue`,
+  `lumeAmber`, `lumeRed`, `lumeLavender`). Add `--layers` to capture the CALayer tree rather than
+  `drawRect`. The saver composites its cached face and its live hands as two layers, and the
+  default capture path exercises an offscreen fallback instead of the code that actually runs on
+  screen.
+- `./audit.sh`: a numerical audit, not a visual one. It renders the Classic dial into a bitmap
+  and measures actual pixels (ring roundness, numeral-to-ray centering, numeral-to-tick
+  clearance) rather than relying on eyeballing a screenshot, plus an informational Eclipse
+  mean-frame-luminance sweep across the day/night color curve.
 
 ## How it's built
 
 There's no `.xcodeproj`. `build.sh` drives the toolchain directly:
 
-1. `swiftc` compiles the sources in `Sources/` with whole-module optimization to a single object file.
+1. `swiftc` compiles the sources in `Sources/` with whole-module optimization to a single object
+   file.
 2. `clang -bundle` links it as a loadable bundle (the Mach-O type a `.saver` needs).
 3. The object is packaged into the `Formzeit.saver` structure alongside `Info.plist`.
 4. `codesign --sign -` ad-hoc signs the bundle.
 
-`ScreenSaverView`'s `configureSheet` is a plain programmatic `NSWindow` (see `Sources/ConfigureSheetController.swift`) rather than a `.xib`, which is what makes building without Xcode possible at all.
+`ScreenSaverView`'s `configureSheet` is a plain programmatic `NSWindow` (see
+`Sources/ConfigureSheetController.swift`) rather than a `.xib`, which is what makes building
+without Xcode possible at all.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
