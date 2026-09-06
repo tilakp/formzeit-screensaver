@@ -22,6 +22,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private weak var worldGroup: NSView?
     private weak var accentGroup: NSView?
     private weak var numeralsRow: NSView?
+    private weak var movementRow: NSView?
     private weak var nightPlateRow: NSView?
     private weak var accentCaption: NSTextField?
     /// Each row's preceding separator, so hiding a row hides its divider.
@@ -317,6 +318,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         stack.spacing = 4
         control.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([control.widthAnchor.constraint(equalToConstant: 508)])
+        movementRow = stack
         return stack
     }
 
@@ -407,6 +409,12 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         // Bauhaus, Classic and Strata always draw their own numerals (or
         // none at all); only the aperture faces can toggle them on.
         setRowHidden(numeralsRow, !(face == .eclipse || face == .filament))
+        // Filament has no second hand — its comet's decay is driven by
+        // `time.secondFraction` directly and never reads `movement` — so the
+        // control sat visible-but-inert there. Every other face genuinely
+        // uses it (Bauhaus/Classic/Eclipse/Strata all call a secondsAngle
+        // function with it).
+        setRowHidden(movementRow, face == .filament)
     }
 
     /// Rows inside a groupBox are positioned by an explicit constraint chain

@@ -280,3 +280,94 @@ for (label, h, m) in [("00:00", 0, 0), ("07:30", 7, 30), ("12:00", 12, 0), ("18:
     let l = meanLuminance(face: .eclipse, hour: h, minute: m, w: 3008, h: 1692)
     print(String(format: "  %@  %.2f%%", label, l * 100))
 }
+
+// MARK: - Strata / Filament: readout and numerals actually render
+//
+// Unlike the geometry spread and the luminance sweep above, these are not
+// judgment calls — either the ink is there or it isn't. Both regressions
+// this guards against have already shipped once: Strata's digital readout
+// and Filament's hour numerals were drawn with NSAttributedString.draw(at:),
+// which silently no-ops with no current NSGraphicsContext (true of the
+// live per-frame hands-layer pass), so neither ever appeared on screen; and
+// Filament's numeral placement radius overflowed the top/bottom frame edge
+// on every display, clipping 12 and 6. Both fail loudly (exit(1)) rather
+// than just printing, since there's no "budget" here to eyeball.
+struct RenderedFrame {
+    // Holds the backing CFData itself, not just a pointer into it — a raw
+    // UnsafePointer here would dangle the moment the CGImage/CGDataProvider
+    // that owns the buffer goes out of scope at the end of `renderFrame`.
+    let data: CFData
+    let bpr: Int, bpp: Int, w: Int, h: Int
+    func lum(_ x: Int, _ y: Int) -> Int {
+        guard x >= 0, x < w, y >= 0, y < h, let base = CFDataGetBytePtr(data) else { return 0 }
+        let o = y * bpr + x * bpp
+        return (Int(base[o]) + Int(base[o + 1]) + Int(base[o + 2])) / 3
+    }
+}
+
+func renderFrame(face: FaceKind, hour: Int, minute: Int, w: Int, h: Int) -> RenderedFrame? {
+    guard let c = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                             space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    let d = FormzeitDefaults()
+    d.face = face
+    d.showNumerals = true
+    var comps = DateComponents()
+    comps.year = 2026; comps.month = 1; comps.day = 1; comps.hour = hour; comps.minute = minute
+    let date = Calendar.current.date(from: comps) ?? Date()
+    FormzeitRenderer.render(context: c, bounds: CGRect(x: 0, y: 0, width: w, height: h),
+                             now: date, elapsedRunTime: 10, isPreview: false, defaults: d)
+    guard let img = c.makeImage(), let dp = img.dataProvider, let pix = dp.data else { return nil }
+    return RenderedFrame(data: pix, bpr: img.bytesPerRow, bpp: img.bitsPerPixel / 8, w: w, h: h)
+}
+
+print("")
+print("strata / filament render guards (pass/fail, not a budget)")
+var auditFailed = false
+
+// The readout is Strata's only exact-time fallback. Check at noon and at a
+// night hour, so a legibility-floor regression (crushed back toward
+// invisible by the diel dim) would be caught too, not just a total outage.
+for (label, hour) in [("noon", 12), ("night", 3)] {
+    guard let frame = renderFrame(face: .strata, hour: hour, minute: 8, w: 2000, h: 2000) else { continue }
+    let cx = 1000, cy = 1000
+    var bright = 0
+    for y in (cy - 80)...(cy + 80) {
+        for x in (cx - 150)...(cx + 150) where frame.lum(x, y) > 8 { bright += 1 }
+    }
+    print("  strata readout ink pixels at \(label): \(bright)")
+    if bright < 50 {
+        print("  FAIL: strata readout does not appear to be drawing at \(label)")
+        auditFailed = true
+    }
+}
+
+// Filament: numerals must render, and none of their ink may touch the
+// top/bottom frame edge. Rendered at a real screen aspect ratio (not the
+// square canvas above) since S = min(w, h) makes a wide display the
+// tightest fit for the top/bottom clipping this specifically checks for.
+if let frame = renderFrame(face: .filament, hour: 9, minute: 0, w: 3008, h: 1692) {
+    var bright = 0
+    var edgeHit = false
+    let margin = 2
+    for y in 0..<frame.h {
+        for x in 0..<frame.w where frame.lum(x, y) > 30 {
+            bright += 1
+            if y < margin || y > frame.h - 1 - margin { edgeHit = true }
+        }
+    }
+    print("  filament ink pixels: \(bright), touches top/bottom edge: \(edgeHit)")
+    if bright < 200 {
+        print("  FAIL: filament numerals/hands do not appear to be drawing")
+        auditFailed = true
+    }
+    if edgeHit {
+        print("  FAIL: filament numeral ink touches the frame edge (12/6 clipped)")
+        auditFailed = true
+    }
+}
+
+if auditFailed {
+    print("")
+    print("AUDIT FAILED")
+    exit(1)
+}

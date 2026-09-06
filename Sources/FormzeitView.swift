@@ -47,6 +47,20 @@ public final class FormzeitView: ScreenSaverView {
     // protection is for. See Lighting's doc comment in FormzeitRenderer.
     private var runStartUptime: TimeInterval = ProcessInfo.processInfo.systemUptime
 
+    /// Dev-preview escape hatch: pins the wall clock used for a rendered
+    /// frame to `FORMZEIT_PREVIEW_NOW` (Unix epoch seconds) when set, so
+    /// `preview.sh --at HH:MM` can actually look at a night frame instead of
+    /// only whatever time it happens to be. Unset for the real installed
+    /// .saver — nothing sets this environment variable outside the preview
+    /// tooling, so this can never affect a live screensaver.
+    private static let previewNowOverride: Date? = {
+        guard let raw = ProcessInfo.processInfo.environment["FORMZEIT_PREVIEW_NOW"],
+              let epoch = TimeInterval(raw) else { return nil }
+        return Date(timeIntervalSince1970: epoch)
+    }()
+
+    private func currentTime() -> Date { Self.previewNowOverride ?? Date() }
+
     // The face (bezel/texture/ticks/numerals) barely changes frame to frame
     // — drift moves it a fraction of a pixel per second, dimming ramps over
     // minutes — but rendering it is the expensive part (soft shadows and a
@@ -231,7 +245,7 @@ public final class FormzeitView: ScreenSaverView {
     /// NOT composited here — it is `faceLayer.contents`, already on screen
     /// underneath.
     fileprivate func drawHandsPass(in context: CGContext) {
-        let now = Date()
+        let now = currentTime()
         let elapsedRunTime = ProcessInfo.processInfo.systemUptime - runStartUptime
         requestFaceCacheRefreshIfNeeded(now: now)
 
@@ -259,7 +273,7 @@ public final class FormzeitView: ScreenSaverView {
     /// exactly the per-frame full-face render this cache exists to avoid.
     public override func draw(_ rect: NSRect) {
         guard let ctx = NSGraphicsContext.current, !ctx.isDrawingToScreen else { return }
-        let now = Date()
+        let now = currentTime()
         let elapsedRunTime = ProcessInfo.processInfo.systemUptime - runStartUptime
         FormzeitRenderer.render(context: ctx.cgContext, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
                                  isPreview: isPreview, defaults: settings)
