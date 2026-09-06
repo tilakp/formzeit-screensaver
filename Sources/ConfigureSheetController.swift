@@ -396,7 +396,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         accentGroup?.isHidden = !(usesLight || face == .classic || face == .bauhaus)
         accentCaption?.stringValue = usesLight
             ? "Tints the light. Adaptive lets it drift with the hour."
-            : "The second hand. Adaptive matches the other two."
+            : face == .bauhaus
+                ? "The second hand and hub. Adaptive matches the other two."
+                : "The second hand. Adaptive matches the other two."
         // The night plate only ever appears if there's a swap to make: a dark
         // day plate stays put, and with "Follow the day" off nothing swaps.
         let daylightPlateSwaps = usesPlate && defaults.nightDimming

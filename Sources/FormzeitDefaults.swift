@@ -14,8 +14,10 @@ final class FormzeitDefaults {
     init() {
         store = ScreenSaverDefaults(forModuleWithName: FormzeitDefaults.moduleName) ?? .standard
         transientSuite = nil
-        registerFactoryDefaults()
+        // Migrate before registering factory defaults: registration would
+        // otherwise make every key appear "present" (see migrateAccentIfNeeded).
         migrateAccentIfNeeded()
+        registerFactoryDefaults()
     }
 
     /// An ephemeral defaults object seeded with a specific look — never
@@ -53,7 +55,7 @@ final class FormzeitDefaults {
             Keys.face: FaceKind.bauhaus.rawValue,
             Keys.world: ColorWorld.ember.rawValue,
             Keys.accent: Accent.adaptive.rawValue,
-            Keys.showNumerals: false,
+            Keys.showNumerals: true,
             Keys.bauhausPalette: "lagoon",
             Keys.bauhausNightPalette: "slate",
         ])
@@ -65,15 +67,15 @@ final class FormzeitDefaults {
     /// choice and hasn't already picked a v2 accent, so a fresh install
     /// keeps the new Adaptive default instead of landing on Lumen.
     ///
-    /// Both checks go through `persistentDomain(forName:)`, NOT
-    /// `object(forKey:)`. `object(forKey:)` searches the registration domain
-    /// too, and `registerFactoryDefaults()` has just registered both keys —
-    /// so it always reports "present" and the migration silently never ran.
+    /// Must run before `registerFactoryDefaults()`. `object(forKey:)` also
+    /// searches the registration domain, so once factory defaults are
+    /// registered both keys always report "present" and this would never
+    /// detect a fresh install. `ScreenSaverDefaults` is also a ByHost
+    /// domain, which `persistentDomain(forName:)` can't see either (it only
+    /// reads `~/Library/Preferences/<name>.plist`) — it's not a substitute.
     private func migrateAccentIfNeeded() {
-        let saved = store.persistentDomain(forName: FormzeitDefaults.moduleName)
-            ?? store.dictionaryRepresentation()
-        guard saved[Keys.accent] == nil else { return }
-        guard let legacy = saved[Keys.accentIndex] as? Int else { return }
+        guard store.object(forKey: Keys.accent) == nil else { return }
+        guard let legacy = store.object(forKey: Keys.accentIndex) as? Int else { return }
         let idx = clamp(legacy, 0, AccentColor.all.count - 1)
         store.set(Accent.migrated(fromLegacyIndex: idx).rawValue, forKey: Keys.accent)
         save()

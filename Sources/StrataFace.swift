@@ -79,19 +79,35 @@ enum StrataFace {
         context.restoreGState()
     }
 
+    /// The one exact-time fallback on a face that otherwise only shows time
+    /// as arc length — so unlike every other element here, its alpha is
+    /// floored rather than left to fall all the way to the diel night dim.
+    /// `NSAttributedString.draw(at:)` silently no-ops with no current
+    /// `NSGraphicsContext` (true of the per-frame hands-layer pass — see
+    /// `HandsLayerDelegate` in FormzeitView.swift), so this goes through
+    /// `CTLineDraw` against the given context instead, same as Classic/Eclipse.
     private static func drawReadout(context: CGContext, center: CGPoint, S: CGFloat, time: ClassicFace.WallClock,
                                      use24Hour: Bool, light: NSColor, L: CGFloat) {
         let hour = use24Hour ? time.hour : (time.hour % 12 == 0 ? 12 : time.hour % 12)
         let text = String(format: "%d:%02d", hour, time.minute)
         let fontSize = 0.20 * S
         let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .ultraLight)
+        let alpha = max(0.22 * L, 0.16)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: light.withAlphaComponent(0.22 * L),
+            .foregroundColor: light.withAlphaComponent(alpha),
             .kern: 0.04 * fontSize,
         ]
         let str = NSAttributedString(string: text, attributes: attrs)
-        let size = str.size()
-        str.draw(at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2))
+        let line = CTLineCreateWithAttributedString(str)
+        let ink = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+        guard !ink.isNull else { return }
+
+        context.saveGState()
+        context.translateBy(x: center.x, y: center.y)
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: -ink.midX, y: -font.capHeight / 2)
+        CTLineDraw(line, context)
+        context.restoreGState()
     }
 }

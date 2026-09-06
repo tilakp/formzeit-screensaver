@@ -73,7 +73,7 @@ enum FormzeitRenderer {
         case .filament:
             let lighting = DielLighting(now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview,
                                          reduceMotion: reduceMotion, defaults: defaults)
-            FilamentFace.render(context: context, bounds: bounds, lighting: lighting,
+            FilamentFace.render(context: context, bounds: bounds, now: now, lighting: lighting,
                                  wakeProgress: wakeEase(elapsedRunTime: elapsedRunTime, delay: 0, duration: 1.2, isPreview: isPreview),
                                  time: time, movement: defaults.movement, use24Hour: defaults.use24Hour,
                                  showNumerals: defaults.showNumerals)
@@ -128,7 +128,17 @@ enum FormzeitRenderer {
         var hasher = Hasher()
         hasher.combine(q(hourFrac / hourSpan * 2 * .pi))
         hasher.combine(q(minuteFrac / 60.0 * 2 * .pi))
-        hasher.combine(q(Double(second)))
+        if defaults.face == .filament && !reduceMotion() {
+            // Filament's comet decays continuously from `t.secondFraction`
+            // and ignores `movement` entirely, so quantising on the
+            // movement-derived second angle (built for an angular sweep)
+            // throttled its redraws to the movement step rate and made the
+            // ~6s decay tail visibly stepped instead of gliding. Quantise on
+            // the decay curve's own input at ~30fps instead.
+            hasher.combine(Int((t.secondFraction * 30).rounded()))
+        } else {
+            hasher.combine(q(Double(second)))
+        }
         // Drift and the idle dim ramp both crawl; a 2s bucket keeps them
         // under a device pixel while still letting them advance.
         hasher.combine(Int(now.timeIntervalSinceReferenceDate / 2))
