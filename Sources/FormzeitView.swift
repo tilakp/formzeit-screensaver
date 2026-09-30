@@ -122,11 +122,30 @@ public final class FormzeitView: ScreenSaverView {
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(handleAccessibilityChange),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+
+        // Since macOS 14, legacyScreenSaver never calls stopAnimation() when
+        // the screensaver is dismissed, and never releases the view either
+        // (FB13041503). The old view keeps animating out of sight, and each
+        // new activation adds another one — CPU and memory grow with every
+        // screensaver start. `willstop` is the one signal that still arrives,
+        // so end the host process there; the system relaunches it for the
+        // next activation. Never for a preview: that one lives inside System
+        // Settings (or the configure sheet), not in a disposable host.
+        if !isPreview {
+            DistributedNotificationCenter.default().addObserver(
+                self, selector: #selector(screenSaverWillStop),
+                name: NSNotification.Name("com.apple.screensaver.willstop"), object: nil)
+        }
+    }
+
+    @objc private func screenSaverWillStop() {
+        exit(0)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        DistributedNotificationCenter.default().removeObserver(self)
     }
 
     private func setUpLayers() {
@@ -145,7 +164,7 @@ public final class FormzeitView: ScreenSaverView {
         handsDelegate.view = self
         handsLayer.delegate = handsDelegate
         handsLayer.anchorPoint = .zero
-        handsLayer.frame = bounds
+        handsLayer.frame = handsRect
         // Transparent, so the cached face shows through everywhere the hands
         // and hub don't cover. CoreAnimation clears the backing store before
         // each draw, which is what lets the previous frame's hands disappear.
@@ -155,6 +174,18 @@ public final class FormzeitView: ScreenSaverView {
         host.addSublayer(faceLayer)
         host.addSublayer(handsLayer)
         updateLayerScale()
+    }
+
+    /// The hands layer covers only a centered square as tall as the short
+    /// side, not the whole screen. Every face's per-frame pass stays inside
+    /// it — measured across drift, wake-in and every face, the widest reach
+    /// is Filament's clamped numerals at 0.489 of the short side — and each
+    /// redraw clears, draws and uploads the whole layer, so the side bars
+    /// were 35% (16:10) to 44% (16:9) of that work for no pixels at all.
+    /// A new face whose per-frame pass reaches further must widen this.
+    private var handsRect: CGRect {
+        let side = min(bounds.width, bounds.height)
+        return CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
     }
 
     private func updateLayerScale() {
@@ -170,7 +201,7 @@ public final class FormzeitView: ScreenSaverView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         faceLayer.frame = bounds
-        handsLayer.frame = bounds
+        handsLayer.frame = handsRect
         CATransaction.commit()
         updateLayerScale()
         handsLayer.setNeedsDisplay()
@@ -247,17 +278,29 @@ public final class FormzeitView: ScreenSaverView {
     fileprivate func drawHandsPass(in context: CGContext) {
         let now = currentTime()
         let elapsedRunTime = ProcessInfo.processInfo.systemUptime - runStartUptime
-        requestFaceCacheRefreshIfNeeded(now: now)
 
         if faceCache == nil {
-            // First frame before the cache exists, or offscreen-context
-            // creation failed (e.g. zero-size bounds) — fall back to a full
-            // live render so something correct is always on screen. This is
-            // the only case where the expensive face pass can still cost a
-            // frame on the main thread, and it only happens once.
-            FormzeitRenderer.renderFace(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
-                                         isPreview: isPreview, defaults: settings)
+            // First frame before the cache exists: build it synchronously so
+            // something correct is on screen at once. It can't be drawn into
+            // this layer instead — this layer covers only the dial square,
+            // so the plate would show as a square between black bars until
+            // the background render landed. This is the only case where the
+            // expensive face pass can still cost a frame on the main thread,
+            // and it only happens once.
+            let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+            if let image = Self.renderFaceImage(bounds: bounds, scale: scale, now: now,
+                                                 elapsedRunTime: elapsedRunTime, isPreview: isPreview,
+                                                 defaults: settings) {
+                installFaceCache(image, size: bounds.size, scale: scale,
+                                 generatedAtUptime: ProcessInfo.processInfo.systemUptime)
+            }
         }
+        requestFaceCacheRefreshIfNeeded(now: now)
+
+        // The layer's origin is the dial square's corner; the renderers
+        // work in view coordinates.
+        let origin = handsRect.origin
+        context.translateBy(x: -origin.x, y: -origin.y)
         FormzeitRenderer.renderHands(context: context, bounds: bounds, now: now, elapsedRunTime: elapsedRunTime,
                                       isPreview: isPreview, defaults: settings)
     }
@@ -316,22 +359,28 @@ public final class FormzeitView: ScreenSaverView {
                     return
                 }
                 if let image = image {
-                    self.faceCache = image
-                    self.faceCacheSize = boundsSnapshot.size
-                    self.faceCacheScale = scale
-                    self.faceCacheGeneratedAtUptime = nowUptime
-                    // Hand the bitmap to the compositor once, here. This is
-                    // the whole point of the layer split: it replaces a
-                    // full-screen CoreGraphics blit on every single frame.
-                    CATransaction.begin()
-                    CATransaction.setDisableActions(true)
-                    self.faceLayer.contentsScale = scale
-                    self.faceLayer.contents = image
-                    CATransaction.commit()
+                    self.installFaceCache(image, size: boundsSnapshot.size, scale: scale,
+                                          generatedAtUptime: nowUptime)
                 }
                 self.setNeedsRedraw()
             }
         }
+    }
+
+    private func installFaceCache(_ image: CGImage, size: NSSize, scale: CGFloat,
+                                  generatedAtUptime: TimeInterval) {
+        faceCache = image
+        faceCacheSize = size
+        faceCacheScale = scale
+        faceCacheGeneratedAtUptime = generatedAtUptime
+        // Hand the bitmap to the compositor once, here. This is the whole
+        // point of the layer split: it replaces a full-screen CoreGraphics
+        // blit on every single frame.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        faceLayer.contentsScale = scale
+        faceLayer.contents = image
+        CATransaction.commit()
     }
 
     private static func renderFaceImage(bounds: NSRect, scale: CGFloat, now: Date, elapsedRunTime: TimeInterval,

@@ -6,11 +6,26 @@ import Cocoa
 /// of the three v2 faces and the most legible at a distance.
 enum StrataFace {
 
-    static func render(context: CGContext, bounds: CGRect, lighting: DielLighting, wakeProgress: CGFloat,
-                        time: ClassicFace.WallClock, movement: Movement, use24Hour: Bool) {
+    /// Cached pass: the flat field and its dither noise. Drawn here rather
+    /// than per frame because the full-screen noise overlay alone measured
+    /// 110ms a frame on a 1440x932@2x panel and 280ms at 5K, which pinned the
+    /// main thread at the 30fps target. The field only follows the slow diel
+    /// curve, so the 6s cache refresh is plenty.
+    static func renderField(context: CGContext, bounds: CGRect, lighting: DielLighting) {
         context.setFillColor(lighting.field.cgColor)
         context.fill(bounds)
 
+        if let noise = sharedNoiseImage {
+            context.saveGState()
+            context.setAlpha(0.035)
+            context.setBlendMode(.softLight)
+            context.draw(noise, in: bounds)
+            context.restoreGState()
+        }
+    }
+
+    static func render(context: CGContext, bounds: CGRect, lighting: DielLighting, wakeProgress: CGFloat,
+                        time: ClassicFace.WallClock, movement: Movement, use24Hour: Bool) {
         let S = min(bounds.width, bounds.height)
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let L = lighting.dim * wakeProgress
@@ -28,14 +43,6 @@ enum StrataFace {
         drawGauge(context: context, center: center, radius: 0.300 * S, S: S, head: hourAngle, light: lighting.light, L: L)
 
         drawReadout(context: context, center: center, S: S, time: time, use24Hour: use24Hour, light: lighting.light, L: L)
-
-        if let noise = sharedNoiseImage {
-            context.saveGState()
-            context.setAlpha(0.035)
-            context.setBlendMode(.softLight)
-            context.draw(noise, in: bounds)
-            context.restoreGState()
-        }
     }
 
     /// Track + accumulated tail ramp + head bloom for one arc. CG has no

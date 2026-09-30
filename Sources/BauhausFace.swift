@@ -266,8 +266,12 @@ enum BauhausFace {
     private struct PlateKey: Equatable {
         let w: Int, h: Int, palette: String, dimBucket: Int
     }
-    private static var plateCache: CGImage?
-    private static var plateKey: PlateKey?
+    /// One entry per pixel size, not one in total. The host runs one view per
+    /// display in the same process, so with two displays of different sizes
+    /// a single shared entry was evicted by the other display on every
+    /// refresh, and each display rebuilt its plate (~200-500ms) every 6s.
+    private struct PlateSize: Hashable { let w: Int, h: Int }
+    private static var plateCache: [PlateSize: (key: PlateKey, image: CGImage)] = [:]
     private static let plateLock = NSLock()
 
     private static func plateImage(context: CGContext, bounds: CGRect,
@@ -282,7 +286,8 @@ enum BauhausFace {
 
         plateLock.lock()
         defer { plateLock.unlock() }
-        if let cached = plateCache, plateKey == key { return cached }
+        let size = PlateSize(w: w, h: h)
+        if let cached = plateCache[size], cached.key == key { return cached.image }
 
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                    space: CGColorSpaceCreateDeviceRGB(),
@@ -294,8 +299,11 @@ enum BauhausFace {
         drawGrain(context: ctx, bounds: px, isDark: palette.isDark)
 
         guard let image = ctx.makeImage() else { return nil }
-        plateCache = image
-        plateKey = key
+        // A display-mode change leaves the old size's full-screen plate
+        // behind; more sizes than any real set of displays means that
+        // happened, so drop them rather than keep the memory forever.
+        if plateCache[size] == nil, plateCache.count >= 4 { plateCache.removeAll() }
+        plateCache[size] = (key, image)
         return image
     }
 

@@ -16,9 +16,8 @@ enum FormzeitRenderer {
     /// Eclipse draws only the field gradient here — the plate and every
     /// aperture moved into the per-frame pass, since they're all cut from
     /// the same surface and the light source orbits continuously (§8).
-    /// Strata/Filament have no expensive/cheap split of their own (both are
-    /// simple strokes, cheap to redraw whole every frame), so this is a
-    /// no-op for them.
+    /// Strata/Filament draw only their flat field and its dither noise here;
+    /// their strokes are cheap and are redrawn whole every frame.
     static func renderFace(context: CGContext, bounds: CGRect, now: Date, elapsedRunTime: TimeInterval, isPreview: Bool,
                             defaults: FormzeitDefaults) {
         switch defaults.face {
@@ -32,8 +31,14 @@ enum FormzeitRenderer {
             let lighting = DielLighting(now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview,
                                          reduceMotion: reduceMotion(), defaults: defaults)
             EclipseFace.renderField(context: context, bounds: bounds, lighting: lighting, increaseContrast: increaseContrast())
-        case .strata, .filament:
-            break
+        case .strata:
+            let lighting = DielLighting(now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview,
+                                         reduceMotion: reduceMotion(), defaults: defaults)
+            StrataFace.renderField(context: context, bounds: bounds, lighting: lighting)
+        case .filament:
+            let lighting = DielLighting(now: now, elapsedRunTime: elapsedRunTime, isPreview: isPreview,
+                                         reduceMotion: reduceMotion(), defaults: defaults)
+            FilamentFace.renderField(context: context, bounds: bounds, lighting: lighting)
         }
     }
 
