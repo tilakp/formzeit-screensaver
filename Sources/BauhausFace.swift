@@ -28,28 +28,41 @@ enum BauhausFace {
         let mark: NSColor    // numerals, markers
         let lume: NSColor    // the hands' recessed channel
         let hand: NSColor    // hand + hub body
+        /// The second hand under the Adaptive accent. nil on dark plates,
+        /// where the hand colour already reads. On a light plate the white
+        /// hand colour is ~1.3:1 against the plate, so the hairline vanished;
+        /// each light plate names its own hue at >= 3:1 instead.
+        let second: NSColor?
         let isDark: Bool
         /// A lume plate: the marks read as *emitting* light rather than as
         /// recesses catching it. Flips the depth model — see `deboss`.
         let isLume: Bool
 
         init(_ key: String, _ name: String, bg: String, mark: String, lume: String, hand: String,
-             isDark: Bool = false, isLume: Bool = false) {
+             second: String? = nil, isDark: Bool = false, isLume: Bool = false) {
             self.key = key; self.name = name
             self.bg = NSColor(hex: bg); self.mark = NSColor(hex: mark)
             self.lume = NSColor(hex: lume); self.hand = NSColor(hex: hand)
+            self.second = second.map { NSColor(hex: $0) }
             self.isDark = isDark; self.isLume = isLume
         }
 
         /// The plates offered as the daytime dial.
+        ///
+        /// Pastels at one lightness sit close together in Oklab, so these are
+        /// spread by hue, chroma and (Stone) lightness: every pair is at
+        /// least 0.068 apart. The old set had Pistachio/Cream/Beige within
+        /// 0.03-0.05 of each other, which read as one plate three times.
+        /// Each `second` is >= 3:1 against its plate; each `mark` >= 6:1.
         static let day: [Palette] = [
-            Palette("lagoon",    "Lagoon",    bg: "#a9d9d2", mark: "#0e4b48", lume: "#dcf1f5", hand: "#fbfdfd"),
-            Palette("pistachio", "Pistachio", bg: "#d7e3c2", mark: "#233b20", lume: "#f2f8e8", hand: "#fdfdfa"),
-            Palette("cream",     "Cream",     bg: "#ece0cb", mark: "#3b3226", lume: "#faf4ea", hand: "#fffdf9"),
-            Palette("sky",       "Sky",       bg: "#bfd4e6", mark: "#1d3e57", lume: "#e9f2fb", hand: "#fbfdff"),
-            Palette("salmon",    "Salmon",    bg: "#eec3b8", mark: "#5e2b2a", lume: "#fdece6", hand: "#fffbf9"),
-            Palette("yellow",    "Yellow",    bg: "#efcf6b", mark: "#4a3712", lume: "#fdf3cb", hand: "#fffdf6"),
-            Palette("beige",     "Beige",     bg: "#ddcfb4", mark: "#3a3324", lume: "#f7f0e2", hand: "#fffdf8"),
+            Palette("lagoon",    "Lagoon",    bg: "#98dccb", mark: "#0e4b48", lume: "#dcf1f5", hand: "#fbfdfd", second: "#b8321f"),
+            Palette("pistachio", "Pistachio", bg: "#cfe3a4", mark: "#233b20", lume: "#eef6e0", hand: "#fdfdfa", second: "#b0302a"),
+            Palette("cream",     "Cream",     bg: "#efe2c8", mark: "#3b3226", lume: "#faf4ea", hand: "#fffdf9", second: "#2a58b0"),
+            Palette("sky",       "Sky",       bg: "#a8cdf0", mark: "#1d3e57", lume: "#e9f2fb", hand: "#fbfdff", second: "#b8401c"),
+            Palette("salmon",    "Salmon",    bg: "#f2bcac", mark: "#5e2b2a", lume: "#fdece6", hand: "#fffbf9", second: "#1f5e63"),
+            Palette("yellow",    "Yellow",    bg: "#efcf6b", mark: "#4a3712", lume: "#fdf3cb", hand: "#fffdf6", second: "#2350a8"),
+            Palette("lilac",     "Lilac",     bg: "#dcc0ec", mark: "#3a2656", lume: "#f4ecfb", hand: "#fefcff", second: "#9a4e12"),
+            Palette("stone",     "Stone",     bg: "#b9b6ae", mark: "#24221f", lume: "#e6e3dc", hand: "#fbfaf6", second: "#b3301a"),
             Palette("slate",     "Slate",     bg: "#20272e", mark: "#aebdc9", lume: "#46545f", hand: "#e6ecf1", isDark: true),
         ]
 
@@ -70,7 +83,10 @@ enum BauhausFace {
         static let all: [Palette] = day + night.dropFirst() // Slate is in both
 
         static func named(_ key: String) -> Palette {
-            all.first { $0.key == key } ?? all[0]
+            // Beige was retired as a near-duplicate of Cream; a saved
+            // "beige" lands on Cream rather than falling back to Lagoon.
+            let key = key == "beige" ? "cream" : key
+            return all.first { $0.key == key } ?? all[0]
         }
 
         static func nightNamed(_ key: String) -> Palette {
@@ -556,7 +572,11 @@ enum BauhausFace {
     }
 
     static func secondHandColor(palette: Palette, defaults: FormzeitDefaults) -> NSColor {
-        if let tint = accentTint(defaults: defaults) { return tint }
+        // A fixed accent keeps its hue but is pushed darker (or lighter)
+        // until the hairline reads against this plate: Amber, Verdigris and
+        // Bone were 1.0-2.1:1 on every light plate, i.e. invisible.
+        if let tint = accentTint(defaults: defaults) { return legible(tint, against: palette.bg) }
+        if let second = palette.second { return second }
         guard palette.isLume else { return palette.hand }
         // A lume plate's `hand` is a deliberately muted steel so the baton
         // bodies don't outshine the lume they carry. On a hairline that thin

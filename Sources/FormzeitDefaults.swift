@@ -157,7 +157,13 @@ final class FormzeitDefaults {
     /// `.adaptive`. Drives Eclipse/Strata/Filament, and (as a fixed hue, or
     /// the current diel light color when Adaptive) Classic's second hand too.
     var accentV2: Accent {
-        get { Accent(rawValue: store.string(forKey: Keys.accent) ?? "") ?? .adaptive }
+        get {
+            let raw = store.string(forKey: Keys.accent) ?? ""
+            // Signal was retired as a near-duplicate of Vermilion; keep a
+            // saved choice red-orange rather than resetting it to Adaptive.
+            if raw == "signal" { return .vermilion }
+            return Accent(rawValue: raw) ?? .adaptive
+        }
         set { store.set(newValue.rawValue, forKey: Keys.accent); save() }
     }
 

@@ -41,15 +41,30 @@ struct DielLighting {
         var fieldOk = mix(raw.field, worldField, 0.75); fieldOk.L = raw.field.L
         var lightOk = mix(raw.light, worldLight, 0.55); lightOk.L = raw.light.L
 
+        // A fixed accent is a fairly bright colour, and blending 65% toward
+        // it used to lift the light back up at night: at 23:30 Adaptive was
+        // near-black while Bone or Amber still drew bright arcs, so picking
+        // an accent quietly switched night dimming off. Darken the accent
+        // itself by how far the diel light sits below noon, then blend: the
+        // accent keeps the same ratio to Adaptive at every hour. Darkening
+        // the blend instead counts the night twice (the diel light in it is
+        // already dark) and sinks Cobalt/Violet below Adaptive. Not pinning
+        // L the way worlds do: that would turn Cobalt near-white at midday.
         let accent = defaults.accentV2
+        let dielDarkening = min(1.0, raw.light.L / Self.noonLight.L)
+        func accented(_ base: Oklab, _ hex: String) -> Oklab {
+            let a = toOklab(NSColor(hex: hex))
+            let dimmed = Oklab(L: a.L * dielDarkening, a: a.a * dielDarkening, b: a.b * dielDarkening)
+            return mix(base, dimmed, 0.65)
+        }
         if let hex = accent.hex {
-            lightOk = mix(lightOk, toOklab(NSColor(hex: hex)), 0.65)
+            lightOk = accented(lightOk, hex)
         }
 
         var light2Ok: Oklab?
         if world == .duplex, let secondHex = world.secondaryLightHex {
             var l2 = mix(raw.light, toOklab(NSColor(hex: secondHex)), 0.55); l2.L = raw.light.L
-            if let hex = accent.hex { l2 = mix(l2, toOklab(NSColor(hex: hex)), 0.65) }
+            if let hex = accent.hex { l2 = accented(l2, hex) }
             light2Ok = l2
         }
 
@@ -95,6 +110,8 @@ struct DielLighting {
     static func previewLightSample(hourOfDay: Double) -> Oklab {
         diel(minutesOfDay: hourOfDay * 60).light
     }
+
+    private static let noonLight = diel(minutesOfDay: 12 * 60).light
 
     /// World position of a light source at the given orbital phase.
     /// `1.31` on the y term so the path never traces the same ellipse twice.

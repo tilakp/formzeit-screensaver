@@ -14,6 +14,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     private var faceButtons: [FaceThumbnailButton] = []
     private var worldButtons: [WorldChipButton] = []
     private var accentButtons: [AccentSwatchButton] = []
+    private var presetButtons: [PresetButton] = []
     private var plateButtons: [PlateChipButton] = []
     private var nightPlateButtons: [PlateChipButton] = []
 
@@ -63,6 +64,8 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         updateWorldSelection()
         updatePlateSelection()
         updateAccentSelection()
+        updateNightPlateSelection()
+        updatePresetSelection()
         updateGroupVisibility()
     }
 
@@ -94,6 +97,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         let content = FlippedView()
         content.translatesAutoresizingMaskIntoConstraints = false
 
+        let presetGroup = groupBox("Presets", rows: [buildPresetRows()])
         let faceGroup = groupBox("Face", rows: [buildFaceRow()])
         let nightRow = buildNightPlateRow()
         self.nightPlateRow = nightRow
@@ -116,7 +120,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         self.worldGroup = worldGroup
         self.accentGroup = accentGroup
 
-        let stack = NSStackView(views: [faceGroup, plateGroup, worldGroup, accentGroup, movementGroup, protectionGroup])
+        let stack = NSStackView(views: [presetGroup, faceGroup, plateGroup, worldGroup, accentGroup, movementGroup, protectionGroup])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -166,6 +170,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            presetGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             faceGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             plateGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
             worldGroup.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -205,6 +210,32 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         }
         updateFaceSelection()
         return row
+    }
+
+    /// Two rows of four, so each tile is as wide as a face thumbnail.
+    private func buildPresetRows() -> NSView {
+        let column = NSStackView()
+        column.orientation = .vertical
+        column.spacing = 8
+        let perRow = 4
+        for start in stride(from: 0, to: Preset.all.count, by: perRow) {
+            let row = NSStackView()
+            row.orientation = .horizontal
+            row.spacing = 9
+            row.distribution = .fillEqually
+            for preset in Preset.all[start..<min(start + perRow, Preset.all.count)] {
+                let button = PresetButton(preset: preset)
+                button.target = self
+                button.action = #selector(presetTapped(_:))
+                presetButtons.append(button)
+                row.addArrangedSubview(button)
+            }
+            column.addArrangedSubview(row)
+            // fillEqually rows need to span the group, not hug their content.
+            row.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
+        }
+        updatePresetSelection()
+        return column
     }
 
     private func buildWorldRow() -> NSView {
@@ -342,6 +373,12 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         updateGroupVisibility()
     }
 
+    /// Writes the ordinary settings; `settingsChanged` then refreshes every
+    /// picker and the group visibility from them.
+    @objc private func presetTapped(_ sender: PresetButton) {
+        sender.preset.apply(to: defaults)
+    }
+
     @objc private func plateTapped(_ sender: PlateChipButton) {
         defaults.bauhausPalette = sender.palette.key
         updatePlateSelection()
@@ -399,7 +436,7 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
         accentCaption?.stringValue = usesLight
             ? "Tints the light. Adaptive lets it drift with the hour."
             : face == .bauhaus
-                ? "The second hand and hub. Adaptive matches the other two."
+                ? "The second hand and hub. Adaptive picks a second hand to suit the plate."
                 : "The second hand. Adaptive matches the other two."
         // The night plate only ever appears if there's a swap to make: a dark
         // day plate stays put, and with "Follow the day" off nothing swaps.
@@ -449,6 +486,9 @@ final class ConfigureSheetController: NSWindowController, NSWindowDelegate {
     }
     private func updateAccentSelection() {
         for b in accentButtons { b.isSelected = (b.accent == defaults.accentV2) }
+    }
+    private func updatePresetSelection() {
+        for b in presetButtons { b.isSelected = b.preset.matches(defaults) }
     }
 
     // MARK: - UI helpers
@@ -626,7 +666,8 @@ final class FaceThumbnailButton: RoundIconButton {
         }
     }
 
-    private static func renderThumbnail(face: FaceKind, world: ColorWorld, accent: Accent, size: NSSize) -> NSImage? {
+    static func renderThumbnail(face: FaceKind, world: ColorWorld, accent: Accent, size: NSSize,
+                                palette: String = "lagoon", nightPalette: String = "slate") -> NSImage? {
         let scale: CGFloat = 2
         let w = Int(size.width * scale), h = Int(size.height * scale)
         guard w > 0, h > 0,
@@ -635,13 +676,75 @@ final class FaceThumbnailButton: RoundIconButton {
         else { return nil }
         ctx.scaleBy(x: scale, y: scale)
         let bounds = CGRect(origin: .zero, size: size)
-        let previewDefaults = FormzeitDefaults(transientFace: face, world: world, accent: accent)
+        let previewDefaults = FormzeitDefaults(transientFace: face, world: world, accent: accent,
+                                               palette: palette, nightPalette: nightPalette)
         var comps = DateComponents()
         comps.hour = 10; comps.minute = 9; comps.second = 36
         let date = Calendar.current.date(from: comps) ?? Date()
         FormzeitRenderer.render(context: ctx, bounds: bounds, now: date, elapsedRunTime: 9999, isPreview: true, defaults: previewDefaults)
         guard let image = ctx.makeImage() else { return nil }
         return NSImage(cgImage: image, size: size)
+    }
+}
+
+/// A preset tile: the preset rendered by the real renderer (its day look,
+/// same fixed time as the face thumbnails), with its name beneath.
+final class PresetButton: RoundIconButton {
+    let preset: Preset
+    private var cachedImage: NSImage?
+    private let labelHeight: CGFloat = 16
+
+    var isSelected = false { didSet { needsDisplay = true } }
+
+    init(preset: Preset) {
+        self.preset = preset
+        super.init(frame: NSRect(x: 0, y: 0, width: 120, height: 88))
+        translatesAutoresizingMaskIntoConstraints = false
+        setPreferredSize(NSSize(width: 120, height: 88))
+        isBordered = false
+        title = ""
+        wantsLayer = true
+        toolTip = preset.name
+        setAccessibilityLabel("\(preset.name) preset")
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// The tile area. NSButton is flipped (y grows downward), so the tile
+    /// starts at the top and the name sits in the strip beneath it.
+    private var tileRect: NSRect {
+        NSRect(x: 2, y: 2, width: bounds.width - 4, height: bounds.height - labelHeight - 4)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = tileRect
+        if cachedImage == nil {
+            cachedImage = FaceThumbnailButton.renderThumbnail(
+                face: preset.face, world: preset.world ?? .ember, accent: preset.accent, size: rect.size,
+                palette: preset.plate ?? "lagoon", nightPalette: preset.nightPlate ?? "slate")
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).addClip()
+        cachedImage?.draw(in: rect)
+        NSGraphicsContext.restoreGraphicsState()
+        if isSelected {
+            let ring = NSBezierPath(roundedRect: rect.insetBy(dx: -1, dy: -1), xRadius: 7, yRadius: 7)
+            NSColor.controlAccentColor.setStroke()
+            ring.lineWidth = 2
+            ring.stroke()
+        }
+        let label = NSString(string: preset.name)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10.5, weight: isSelected ? .semibold : .regular),
+            .foregroundColor: isSelected ? NSColor.labelColor : NSColor.secondaryLabelColor,
+        ]
+        let size = label.size(withAttributes: attrs)
+        label.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.height - labelHeight + 1),
+                   withAttributes: attrs)
+    }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: tileRect, xRadius: 6, yRadius: 6).fill()
     }
 }
 

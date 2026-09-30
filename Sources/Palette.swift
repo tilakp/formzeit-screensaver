@@ -135,6 +135,36 @@ func mix(_ a: Oklab, _ b: Oklab, _ t: Double) -> Oklab {
     Oklab(L: a.L + (b.L - a.L) * t, a: a.a + (b.a - a.a) * t, b: a.b + (b.b - a.b) * t)
 }
 
+/// WCAG relative luminance of an sRGB colour.
+private func relativeLuminance(_ c: NSColor) -> Double {
+    guard let rgb = c.usingColorSpace(.sRGB) else { return 0 }
+    return 0.2126 * srgbToLinear(Double(rgb.redComponent))
+         + 0.7152 * srgbToLinear(Double(rgb.greenComponent))
+         + 0.0722 * srgbToLinear(Double(rgb.blueComponent))
+}
+
+func contrastRatio(_ a: NSColor, _ b: NSColor) -> Double {
+    let la = relativeLuminance(a), lb = relativeLuminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+}
+
+/// `color` with its Oklab lightness moved away from `background` — darker on
+/// a light ground, lighter on a dark one — until the two reach `minimum`
+/// contrast. Hue and chroma are kept, so a fixed accent still reads as
+/// itself; a colour that already passes comes back unchanged.
+func legible(_ color: NSColor, against background: NSColor, minimum: Double = 3.0) -> NSColor {
+    guard contrastRatio(color, background) < minimum else { return color }
+    var ok = toOklab(color)
+    let step = relativeLuminance(background) > 0.18 ? -0.01 : 0.01
+    var result = color
+    for _ in 0..<100 {
+        ok.L = min(max(ok.L + step, 0), 1)
+        result = fromOklab(ok)
+        if contrastRatio(result, background) >= minimum || ok.L == 0 || ok.L == 1 { break }
+    }
+    return result
+}
+
 /// One diel keyframe: a field (ground) colour, a light (emissive) colour,
 /// and a luminance multiplier, at a given hour of the day.
 struct DielStop {
@@ -205,15 +235,15 @@ enum ColorWorld: String, CaseIterable {
 /// replace it. `Adaptive` (the new default) passes the diel light through
 /// unchanged — the clock takes the colour of the hour.
 enum Accent: String, CaseIterable {
-    case adaptive, lumen, vermilion, cobalt, signal, verdigris, bone
+    case adaptive, lumen, vermilion, cobalt, violet, verdigris, bone
 
     var displayName: String {
         switch self {
         case .adaptive: return "Adaptive"
-        case .lumen: return "Lumen"
+        case .lumen: return "Amber" // rawValue kept for persisted settings
         case .vermilion: return "Vermilion"
         case .cobalt: return "Cobalt"
-        case .signal: return "Signal"
+        case .violet: return "Violet"
         case .verdigris: return "Verdigris"
         case .bone: return "Bone"
         }
@@ -226,7 +256,7 @@ enum Accent: String, CaseIterable {
         case .lumen: return "#F2A03C"
         case .vermilion: return "#D8452E"
         case .cobalt: return "#2E6FCB"
-        case .signal: return "#E8571C"
+        case .violet: return "#8A5CD6"
         case .verdigris: return "#6FA893"
         case .bone: return "#E6E4DE"
         }
@@ -234,15 +264,57 @@ enum Accent: String, CaseIterable {
 
     /// The pre-v2 accent list was these same six colors in this same order,
     /// just renamed/recolored — index-for-index migration for anyone with a
-    /// saved `accentIndex`. See `FormzeitDefaults.migrateAccentIfNeeded`.
+    /// saved `accentIndex`, except index 3 (Signal Orange), which now lands
+    /// on Vermilion. See `FormzeitDefaults.migrateAccentIfNeeded`.
     static func migrated(fromLegacyIndex idx: Int) -> Accent {
         switch idx {
         case 0: return .lumen
         case 1: return .vermilion
         case 2: return .cobalt
-        case 3: return .signal
+        case 3: return .vermilion // was Signal, retired as a near-duplicate
         case 4: return .verdigris
         default: return .bone
         }
+    }
+}
+
+/// A named starting point: one tap sets the face and its colours together.
+/// Applying one writes the ordinary settings, so every control can still be
+/// changed afterward; a preset is never stored as a mode of its own. Each
+/// sets only what its face uses: the Bauhaus presets name a day plate and a
+/// night plate matched to it (the night list was otherwise picked blind),
+/// the light-face presets name a world.
+struct Preset {
+    let name: String
+    let face: FaceKind
+    var plate: String? = nil
+    var nightPlate: String? = nil
+    var world: ColorWorld? = nil
+    let accent: Accent
+
+    static let all: [Preset] = [
+        Preset(name: "Pool",      face: .bauhaus,  plate: "lagoon", nightPlate: "lumeGreen",    accent: .adaptive),
+        Preset(name: "Paper",     face: .bauhaus,  plate: "cream",  nightPlate: "lumeAmber",    accent: .adaptive),
+        Preset(name: "Primary",   face: .bauhaus,  plate: "yellow", nightPlate: "slate",        accent: .vermilion),
+        Preset(name: "Harbor",    face: .bauhaus,  plate: "sky",    nightPlate: "lumeBlue",     accent: .adaptive),
+        Preset(name: "Dusk",      face: .bauhaus,  plate: "lilac",  nightPlate: "lumeLavender", accent: .adaptive),
+        Preset(name: "Ember",     face: .strata,   world: .ember,   accent: .adaptive),
+        Preset(name: "Moonlight", face: .eclipse,  world: .lunar,   accent: .bone),
+        Preset(name: "Radium",    face: .filament, world: .radium,  accent: .adaptive),
+    ]
+
+    func apply(to defaults: FormzeitDefaults) {
+        defaults.face = face
+        if let plate = plate { defaults.bauhausPalette = plate }
+        if let nightPlate = nightPlate { defaults.bauhausNightPalette = nightPlate }
+        if let world = world { defaults.world = world }
+        defaults.accentV2 = accent
+    }
+
+    func matches(_ defaults: FormzeitDefaults) -> Bool {
+        defaults.face == face && defaults.accentV2 == accent
+            && (plate == nil || defaults.bauhausPalette == plate)
+            && (nightPlate == nil || defaults.bauhausNightPalette == nightPlate)
+            && (world == nil || defaults.world == world)
     }
 }
